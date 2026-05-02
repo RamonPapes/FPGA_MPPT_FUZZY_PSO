@@ -1,0 +1,72 @@
+# Intel Quartus Prime - .gitignore
+
+# -------------------------------------
+# Pastas de Banco de Dados e Compilação
+# -------------------------------------
+# Estes diretórios armazenam dados intermediários de síntese e roteamento.
+# Eles são muito grandes e recriados a cada compilação.
+db/
+incremental_db/
+greybox_tmp/
+hc_output/
+.qsys_edit/
+.ipcache/
+
+# -------------------------------------
+# Diretórios de Saída e Simulação
+# -------------------------------------
+output_files/
+simulation/
+modelsim/
+work/
+
+# -------------------------------------
+# Logs e Relatórios
+# -------------------------------------
+*.rpt
+*.summary
+*.done
+*.jdi
+*.pin
+*.qws
+*.sld
+*.txt
+msim_transcript
+
+# -------------------------------------
+# Arquivos de Programação (Bitstreams)
+# -------------------------------------
+# Por padrão, arquivos grandes gerados (.sof, .pof) são ignorados.
+# Se você precisa manter releases de bitstreams no repositório, 
+# comente as linhas abaixo.
+*.sof
+*.pof
+*.jic
+*.ekp
+
+# -------------------------------------
+# Arquivos do Qsys / Platform Designer
+# -------------------------------------
+# Mantém-se o arquivo .qsys principal, mas os arquivos gerados 
+# automaticamente podem ser ignorados.
+*_generation_script.tcl
+*_generation.rpt
+*_inst.v
+*_inst.vhd
+*_bb.v
+
+# -------------------------------------
+# Simulação (ModelSim / QuestaSim) específicos
+# -------------------------------------
+*.mpf
+*.mti
+*.ini
+
+# -------------------------------------
+# Arquivos Temporários e de Backup
+# -------------------------------------
+*.bak
+*.v.bak
+*.vhd.bak
+*.orig
+*~
