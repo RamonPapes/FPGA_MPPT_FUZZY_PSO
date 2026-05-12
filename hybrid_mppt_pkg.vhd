@@ -6,23 +6,8 @@ package hybrid_mppt_pkg is
 
     constant N_PARTICLES : integer := 10;
 
-    constant W_PSO  : integer := 50;   -- 0.50 scaled by 100
-    constant C1_PSO : integer := 50;   -- 0.50 scaled by 100
-    constant C2_PSO : integer := 40;   -- 0.40 scaled by 100
-
-    constant RHO_MIN : integer := 53;  -- 0.53 scaled by 100
-    constant RHO_MAX : integer := 56;  -- 0.56 scaled by 100
-
-    constant VEL_MIN : integer := -20;
-    constant VEL_MAX : integer :=  20;
-
     constant DUTY_MIN : integer := 0;
     constant DUTY_MAX : integer := 100;
-
-    constant DEADZONE          : integer := 2;
-    constant SEARCH_RADIUS     : integer := 12;
-    constant FOKKER_STEP_MIN   : integer := 1;
-    constant FOKKER_STEP_MAX   : integer := 8;
 
     type particle_array is array (0 to N_PARTICLES - 1) of integer;
     type fuzzy_array is array (0 to 6) of integer;
@@ -62,10 +47,26 @@ package hybrid_mppt_pkg is
 
     function next_lfsr(x : unsigned(15 downto 0)) return unsigned;
     function rand_0_100(x : unsigned(15 downto 0)) return integer;
-    function rand_rho(x : unsigned(15 downto 0)) return integer;
+    function rand_rho(x : unsigned(15 downto 0); rho_min, rho_max : integer) return integer;
 
-    function fuzzy_compute(e_in, de_in : integer) return integer;
-    function fokker_planck_step(e_in, de_in : integer) return integer;
+    function fuzzy_compute(
+        e_in,
+        de_in,
+        deadzone,
+        fuzzy_step,
+        fuzzy_edge : integer
+    ) return integer;
+
+    function fokker_planck_step(
+        e_in,
+        de_in,
+        deadzone,
+        fokker_step_min,
+        fokker_step_max,
+        fuzzy_step,
+        fuzzy_edge : integer
+    ) return integer;
+
     function pno_direction(delta_p, delta_v : integer) return integer;
 
 end package hybrid_mppt_pkg;
@@ -115,7 +116,9 @@ package body hybrid_mppt_pkg is
 
     function triangle(x, a, b, c : integer) return integer is
     begin
-        if x <= a or x >= c then
+        if b <= a or c <= b then
+            return 0;
+        elsif x <= a or x >= c then
             return 0;
         elsif x = b then
             return 100;
@@ -130,7 +133,9 @@ package body hybrid_mppt_pkg is
         x, plateau_end, slope_start, slope_end : integer
     ) return integer is
     begin
-        if x <= plateau_end then
+        if slope_end <= slope_start then
+            return 0;
+        elsif x <= plateau_end then
             return 100;
         elsif x >= slope_end then
             return 0;
@@ -145,7 +150,9 @@ package body hybrid_mppt_pkg is
         x, slope_start, slope_end, plateau_start : integer
     ) return integer is
     begin
-        if x >= plateau_start then
+        if slope_end <= slope_start then
+            return 0;
+        elsif x >= plateau_start then
             return 100;
         elsif x <= slope_start then
             return 0;
@@ -170,12 +177,28 @@ package body hybrid_mppt_pkg is
         return to_integer(x(7 downto 0)) mod 101;
     end function;
 
-    function rand_rho(x : unsigned(15 downto 0)) return integer is
+    function rand_rho(x : unsigned(15 downto 0); rho_min, rho_max : integer) return integer is
+        variable low_rho  : integer;
+        variable high_rho : integer;
     begin
-        return RHO_MIN + (to_integer(x(7 downto 0)) mod (RHO_MAX - RHO_MIN + 1));
+        if rho_min <= rho_max then
+            low_rho := rho_min;
+            high_rho := rho_max;
+        else
+            low_rho := rho_max;
+            high_rho := rho_min;
+        end if;
+
+        return low_rho + (to_integer(x(7 downto 0)) mod (high_rho - low_rho + 1));
     end function;
 
-    function fuzzy_compute(e_in, de_in : integer) return integer is
+    function fuzzy_compute(
+        e_in,
+        de_in,
+        deadzone,
+        fuzzy_step,
+        fuzzy_edge : integer
+    ) return integer is
         variable mu_e  : fuzzy_array;
         variable mu_de : fuzzy_array;
 
@@ -186,29 +209,34 @@ package body hybrid_mppt_pkg is
         variable rule_val : integer;
         variable e        : integer;
         variable de       : integer;
+        variable step_v   : integer;
+        variable edge_v   : integer;
     begin
         e  := clamp(e_in,  -100, 100);
         de := clamp(de_in, -100, 100);
 
-        if abs_int(e) < DEADZONE and abs_int(de) < DEADZONE then
+        step_v := clamp(fuzzy_step, 1, 49);
+        edge_v := clamp(fuzzy_edge, (2 * step_v) + 1, 100);
+
+        if abs_int(e) < deadzone and abs_int(de) < deadzone then
             return 0;
         end if;
 
-        mu_e(0) := trapezoidal_shoulder_neg(e, -100, -90, -60);
-        mu_e(1) := triangle(e, -90, -60, -30);
-        mu_e(2) := triangle(e, -60, -30, 0);
-        mu_e(3) := triangle(e, -30, 0, 30);
-        mu_e(4) := triangle(e, 0, 30, 60);
-        mu_e(5) := triangle(e, 30, 60, 90);
-        mu_e(6) := trapezoidal_shoulder_pos(e, 60, 90, 100);
+        mu_e(0) := trapezoidal_shoulder_neg(e, -100, -edge_v, -(2 * step_v));
+        mu_e(1) := triangle(e, -edge_v, -(2 * step_v), -step_v);
+        mu_e(2) := triangle(e, -(2 * step_v), -step_v, 0);
+        mu_e(3) := triangle(e, -step_v, 0, step_v);
+        mu_e(4) := triangle(e, 0, step_v, 2 * step_v);
+        mu_e(5) := triangle(e, step_v, 2 * step_v, edge_v);
+        mu_e(6) := trapezoidal_shoulder_pos(e, 2 * step_v, edge_v, 100);
 
-        mu_de(0) := trapezoidal_shoulder_neg(de, -100, -90, -60);
-        mu_de(1) := triangle(de, -90, -60, -30);
-        mu_de(2) := triangle(de, -60, -30, 0);
-        mu_de(3) := triangle(de, -30, 0, 30);
-        mu_de(4) := triangle(de, 0, 30, 60);
-        mu_de(5) := triangle(de, 30, 60, 90);
-        mu_de(6) := trapezoidal_shoulder_pos(de, 60, 90, 100);
+        mu_de(0) := trapezoidal_shoulder_neg(de, -100, -edge_v, -(2 * step_v));
+        mu_de(1) := triangle(de, -edge_v, -(2 * step_v), -step_v);
+        mu_de(2) := triangle(de, -(2 * step_v), -step_v, 0);
+        mu_de(3) := triangle(de, -step_v, 0, step_v);
+        mu_de(4) := triangle(de, 0, step_v, 2 * step_v);
+        mu_de(5) := triangle(de, step_v, 2 * step_v, edge_v);
+        mu_de(6) := trapezoidal_shoulder_pos(de, 2 * step_v, edge_v, 100);
 
         for i in 0 to 6 loop
             for j in 0 to 6 loop
@@ -227,18 +255,35 @@ package body hybrid_mppt_pkg is
         end if;
     end function;
 
-    function fokker_planck_step(e_in, de_in : integer) return integer is
+    function fokker_planck_step(
+        e_in,
+        de_in,
+        deadzone,
+        fokker_step_min,
+        fokker_step_max,
+        fuzzy_step,
+        fuzzy_edge : integer
+    ) return integer is
         variable fuzzy_val : integer;
         variable mag       : integer;
         variable step_val  : integer;
+        variable step_min  : integer;
+        variable step_max  : integer;
     begin
-        fuzzy_val := fuzzy_compute(e_in, de_in);
+        if fokker_step_min <= fokker_step_max then
+            step_min := fokker_step_min;
+            step_max := fokker_step_max;
+        else
+            step_min := fokker_step_max;
+            step_max := fokker_step_min;
+        end if;
+
+        fuzzy_val := fuzzy_compute(e_in, de_in, deadzone, fuzzy_step, fuzzy_edge);
         mag := abs_int(fuzzy_val);
 
-        step_val := FOKKER_STEP_MIN +
-            (mag * (FOKKER_STEP_MAX - FOKKER_STEP_MIN)) / 100;
+        step_val := step_min + (mag * (step_max - step_min)) / 100;
 
-        return clamp(step_val, FOKKER_STEP_MIN, FOKKER_STEP_MAX);
+        return clamp(step_val, step_min, step_max);
     end function;
 
     function pno_direction(delta_p, delta_v : integer) return integer is

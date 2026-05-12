@@ -6,7 +6,20 @@ use work.hybrid_mppt_pkg.ALL;
 
 entity hybrid_pso_fuzzy_mppt is
     generic (
-        SETTLE_CYCLES : integer := 1000
+        SETTLE_CYCLES    : integer := 1000;
+        W_PSO_G          : integer := 50;
+        C1_PSO_G         : integer := 50;
+        C2_PSO_G         : integer := 40;
+        RHO_MIN_G        : integer := 53;
+        RHO_MAX_G        : integer := 56;
+        VEL_MIN_G        : integer := -20;
+        VEL_MAX_G        : integer := 20;
+        DEADZONE_G       : integer := 2;
+        SEARCH_RADIUS_G  : integer := 12;
+        FOKKER_STEP_MIN_G: integer := 1;
+        FOKKER_STEP_MAX_G: integer := 8;
+        FUZZY_STEP_G     : integer := 30;
+        FUZZY_EDGE_G     : integer := 90
     );
     port (
         clk              : in  std_logic;
@@ -181,7 +194,13 @@ begin
 
                         error_next := clamp(error_raw, -100, 100);
                         delta_e_next := clamp(error_next - prev_error, -100, 100);
-                        fuzzy_next := fuzzy_compute(error_next, delta_e_next);
+                        fuzzy_next := fuzzy_compute(
+                            error_next,
+                            delta_e_next,
+                            DEADZONE_G,
+                            FUZZY_STEP_G,
+                            FUZZY_EDGE_G
+                        );
 
                         pno_dir := pno_direction(delta_p, delta_v);
                         if pno_dir = 0 then
@@ -191,7 +210,16 @@ begin
                             pno_dir := 1;
                         end if;
 
-                        ffp_step := fokker_planck_step(error_next, delta_e_next);
+                        ffp_step := fokker_planck_step(
+                            error_next,
+                            delta_e_next,
+                            DEADZONE_G,
+                            FOKKER_STEP_MIN_G,
+                            FOKKER_STEP_MAX_G,
+                            FUZZY_STEP_G,
+                            FUZZY_EDGE_G
+                        );
+
                         refined_duty := clamp(
                             duty_reg + (pno_dir * ffp_step),
                             DUTY_MIN,
@@ -231,28 +259,28 @@ begin
                     when UPDATE_SWARM =>
                         lfsr_var := lfsr;
 
-                        search_low := clamp(search_center - SEARCH_RADIUS, DUTY_MIN, DUTY_MAX);
-                        search_high := clamp(search_center + SEARCH_RADIUS, DUTY_MIN, DUTY_MAX);
+                        search_low := clamp(search_center - SEARCH_RADIUS_G, DUTY_MIN, DUTY_MAX);
+                        search_high := clamp(search_center + SEARCH_RADIUS_G, DUTY_MIN, DUTY_MAX);
 
                         for i in 0 to N_PARTICLES - 1 loop
                             lfsr_var := next_lfsr(lfsr_var);
-                            rho1 := rand_rho(lfsr_var);
+                            rho1 := rand_rho(lfsr_var, RHO_MIN_G, RHO_MAX_G);
 
                             lfsr_var := next_lfsr(lfsr_var);
-                            rho2 := rand_rho(lfsr_var);
+                            rho2 := rand_rho(lfsr_var, RHO_MIN_G, RHO_MAX_G);
 
                             cognitive :=
-                                (C1_PSO * rho1 * (pbest_pos(i) - particle_pos(i))) / 10000;
+                                (C1_PSO_G * rho1 * (pbest_pos(i) - particle_pos(i))) / 10000;
 
                             social :=
-                                (C2_PSO * rho2 * (gbest_pos - particle_pos(i))) / 10000;
+                                (C2_PSO_G * rho2 * (gbest_pos - particle_pos(i))) / 10000;
 
                             v_new :=
-                                ((W_PSO * particle_vel(i)) / 100) +
+                                ((W_PSO_G * particle_vel(i)) / 100) +
                                 cognitive +
                                 social;
 
-                            v_new := clamp(v_new, VEL_MIN, VEL_MAX);
+                            v_new := clamp(v_new, VEL_MIN_G, VEL_MAX_G);
 
                             p_new := particle_pos(i) + v_new;
                             p_new := clamp(p_new, search_low, search_high);
