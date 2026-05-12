@@ -74,6 +74,9 @@ architecture Behavioral of hybrid_pso_fuzzy_mppt is
     signal fuzzy_delta    : integer := 0;
 
     signal duty_reg       : integer range 0 to 100 := 50;
+    signal pno_candidate  : integer range 0 to 100 := 50;
+    signal search_center  : integer range 0 to 100 := 50;
+    signal fokker_step    : integer := 1;
 
     signal lfsr           : unsigned(15 downto 0) := x"ACE1";
 
@@ -91,15 +94,19 @@ begin
         variable delta_e_next    : integer;
         variable fuzzy_next      : integer;
 
-        variable r1              : integer;
-        variable r2              : integer;
+        variable rho1            : integer;
+        variable rho2            : integer;
         variable v_new           : integer;
         variable p_new           : integer;
         variable cognitive       : integer;
         variable social          : integer;
 
         variable lfsr_var        : unsigned(15 downto 0);
+        variable pno_dir         : integer;
+        variable ffp_step        : integer;
         variable refined_duty    : integer;
+        variable search_low      : integer;
+        variable search_high     : integer;
     begin
         if reset = '1' then
             particle_pos <= INIT_POS;
@@ -122,6 +129,9 @@ begin
             fuzzy_delta  <= 0;
 
             duty_reg     <= 50;
+            pno_candidate <= 50;
+            search_center <= 50;
+            fokker_step   <= 1;
             duty_out     <= std_logic_vector(to_unsigned(50, 8));
 
             store_valid  <= '0';
@@ -163,7 +173,7 @@ begin
                         delta_p := power_now - prev_power;
                         delta_v := voltage_now - prev_voltage;
 
-                        if abs(delta_v) < 4 then
+                        if abs_int(delta_v) < 4 then
                             error_raw := 0;
                         else
                             error_raw := (delta_p * 100) / delta_v;
@@ -173,18 +183,35 @@ begin
                         delta_e_next := clamp(error_next - prev_error, -100, 100);
                         fuzzy_next := fuzzy_compute(error_next, delta_e_next);
 
+                        pno_dir := pno_direction(delta_p, delta_v);
+                        if pno_dir = 0 then
+                            pno_dir := sign_int(fuzzy_next);
+                        end if;
+                        if pno_dir = 0 then
+                            pno_dir := 1;
+                        end if;
+
+                        ffp_step := fokker_planck_step(error_next, delta_e_next);
+                        refined_duty := clamp(
+                            duty_reg + (pno_dir * ffp_step),
+                            DUTY_MIN,
+                            DUTY_MAX
+                        );
+
                         error_reg <= error_next;
                         delta_e_reg <= delta_e_next;
                         fuzzy_delta <= fuzzy_next;
+                        fokker_step <= ffp_step;
+                        pno_candidate <= refined_duty;
 
                         if power_now > pbest_power(current_idx) then
                             pbest_power(current_idx) <= power_now;
-                            pbest_pos(current_idx) <= particle_pos(current_idx);
+                            pbest_pos(current_idx) <= duty_reg;
                         end if;
 
                         if power_now > gbest_power then
                             gbest_power <= power_now;
-                            gbest_pos <= particle_pos(current_idx);
+                            gbest_pos <= duty_reg;
                         end if;
 
                         prev_power <= power_now;
@@ -204,18 +231,21 @@ begin
                     when UPDATE_SWARM =>
                         lfsr_var := lfsr;
 
+                        search_low := clamp(search_center - SEARCH_RADIUS, DUTY_MIN, DUTY_MAX);
+                        search_high := clamp(search_center + SEARCH_RADIUS, DUTY_MIN, DUTY_MAX);
+
                         for i in 0 to N_PARTICLES - 1 loop
                             lfsr_var := next_lfsr(lfsr_var);
-                            r1 := rand_0_100(lfsr_var);
+                            rho1 := rand_rho(lfsr_var);
 
                             lfsr_var := next_lfsr(lfsr_var);
-                            r2 := rand_0_100(lfsr_var);
+                            rho2 := rand_rho(lfsr_var);
 
                             cognitive :=
-                                (C1_PSO * r1 * (pbest_pos(i) - particle_pos(i))) / 10000;
+                                (C1_PSO * rho1 * (pbest_pos(i) - particle_pos(i))) / 10000;
 
                             social :=
-                                (C2_PSO * r2 * (gbest_pos - particle_pos(i))) / 10000;
+                                (C2_PSO * rho2 * (gbest_pos - particle_pos(i))) / 10000;
 
                             v_new :=
                                 ((W_PSO * particle_vel(i)) / 100) +
@@ -225,19 +255,16 @@ begin
                             v_new := clamp(v_new, VEL_MIN, VEL_MAX);
 
                             p_new := particle_pos(i) + v_new;
+                            p_new := clamp(p_new, search_low, search_high);
                             p_new := clamp(p_new, DUTY_MIN, DUTY_MAX);
 
                             particle_vel(i) <= v_new;
                             particle_pos(i) <= p_new;
                         end loop;
 
-                        refined_duty :=
-                            gbest_pos + ((fuzzy_delta * FUZZY_GAIN) / 100);
-
-                        refined_duty := clamp(refined_duty, DUTY_MIN, DUTY_MAX);
-
-                        particle_pos(0) <= refined_duty;
+                        particle_pos(0) <= pno_candidate;
                         particle_vel(0) <= 0;
+                        search_center <= pno_candidate;
 
                         lfsr <= lfsr_var;
 

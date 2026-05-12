@@ -4,11 +4,14 @@ use IEEE.NUMERIC_STD.ALL;
 
 package hybrid_mppt_pkg is
 
-    constant N_PARTICLES : integer := 5;
+    constant N_PARTICLES : integer := 10;
 
     constant W_PSO  : integer := 50;   -- 0.50 scaled by 100
-    constant C1_PSO : integer := 120;  -- 1.20 scaled by 100
-    constant C2_PSO : integer := 120;  -- 1.20 scaled by 100
+    constant C1_PSO : integer := 50;   -- 0.50 scaled by 100
+    constant C2_PSO : integer := 40;   -- 0.40 scaled by 100
+
+    constant RHO_MIN : integer := 53;  -- 0.53 scaled by 100
+    constant RHO_MAX : integer := 56;  -- 0.56 scaled by 100
 
     constant VEL_MIN : integer := -20;
     constant VEL_MAX : integer :=  20;
@@ -16,8 +19,10 @@ package hybrid_mppt_pkg is
     constant DUTY_MIN : integer := 0;
     constant DUTY_MAX : integer := 100;
 
-    constant DEADZONE   : integer := 2;
-    constant FUZZY_GAIN : integer := 10;
+    constant DEADZONE          : integer := 2;
+    constant SEARCH_RADIUS     : integer := 12;
+    constant FOKKER_STEP_MIN   : integer := 1;
+    constant FOKKER_STEP_MAX   : integer := 8;
 
     type particle_array is array (0 to N_PARTICLES - 1) of integer;
     type fuzzy_array is array (0 to 6) of integer;
@@ -42,6 +47,8 @@ package hybrid_mppt_pkg is
 
     function clamp(x, low, high : integer) return integer;
     function min_int(a, b : integer) return integer;
+    function abs_int(x : integer) return integer;
+    function sign_int(x : integer) return integer;
 
     function triangle(x, a, b, c : integer) return integer;
 
@@ -55,8 +62,11 @@ package hybrid_mppt_pkg is
 
     function next_lfsr(x : unsigned(15 downto 0)) return unsigned;
     function rand_0_100(x : unsigned(15 downto 0)) return integer;
+    function rand_rho(x : unsigned(15 downto 0)) return integer;
 
     function fuzzy_compute(e_in, de_in : integer) return integer;
+    function fokker_planck_step(e_in, de_in : integer) return integer;
+    function pno_direction(delta_p, delta_v : integer) return integer;
 
 end package hybrid_mppt_pkg;
 
@@ -80,6 +90,26 @@ package body hybrid_mppt_pkg is
             return a;
         else
             return b;
+        end if;
+    end function;
+
+    function abs_int(x : integer) return integer is
+    begin
+        if x < 0 then
+            return -x;
+        else
+            return x;
+        end if;
+    end function;
+
+    function sign_int(x : integer) return integer is
+    begin
+        if x > 0 then
+            return 1;
+        elsif x < 0 then
+            return -1;
+        else
+            return 0;
         end if;
     end function;
 
@@ -140,6 +170,11 @@ package body hybrid_mppt_pkg is
         return to_integer(x(7 downto 0)) mod 101;
     end function;
 
+    function rand_rho(x : unsigned(15 downto 0)) return integer is
+    begin
+        return RHO_MIN + (to_integer(x(7 downto 0)) mod (RHO_MAX - RHO_MIN + 1));
+    end function;
+
     function fuzzy_compute(e_in, de_in : integer) return integer is
         variable mu_e  : fuzzy_array;
         variable mu_de : fuzzy_array;
@@ -155,7 +190,7 @@ package body hybrid_mppt_pkg is
         e  := clamp(e_in,  -100, 100);
         de := clamp(de_in, -100, 100);
 
-        if abs(e) < DEADZONE and abs(de) < DEADZONE then
+        if abs_int(e) < DEADZONE and abs_int(de) < DEADZONE then
             return 0;
         end if;
 
@@ -187,6 +222,43 @@ package body hybrid_mppt_pkg is
 
         if denominator /= 0 then
             return numerator / denominator;
+        else
+            return 0;
+        end if;
+    end function;
+
+    function fokker_planck_step(e_in, de_in : integer) return integer is
+        variable fuzzy_val : integer;
+        variable mag       : integer;
+        variable step_val  : integer;
+    begin
+        fuzzy_val := fuzzy_compute(e_in, de_in);
+        mag := abs_int(fuzzy_val);
+
+        step_val := FOKKER_STEP_MIN +
+            (mag * (FOKKER_STEP_MAX - FOKKER_STEP_MIN)) / 100;
+
+        return clamp(step_val, FOKKER_STEP_MIN, FOKKER_STEP_MAX);
+    end function;
+
+    function pno_direction(delta_p, delta_v : integer) return integer is
+    begin
+        if delta_p > 0 then
+            if delta_v > 0 then
+                return 1;
+            elsif delta_v < 0 then
+                return -1;
+            else
+                return 0;
+            end if;
+        elsif delta_p < 0 then
+            if delta_v > 0 then
+                return -1;
+            elsif delta_v < 0 then
+                return 1;
+            else
+                return 0;
+            end if;
         else
             return 0;
         end if;
