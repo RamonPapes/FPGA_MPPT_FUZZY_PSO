@@ -117,6 +117,7 @@ begin
 
         variable volt_val   : integer;
         variable curr_val   : integer;
+        variable power_now  : integer;
         variable sample_idx : integer := 0;
     begin
 
@@ -130,7 +131,7 @@ begin
 
         wait until rising_edge(clk);
 
-        write(out_line, string'("sample voltage current duty gbest_duty gbest_power error delta_e fuzzy_delta "));
+        write(out_line, string'("sample voltage current power_now duty gbest_duty gbest_power error delta_e fuzzy_delta "));
         write(out_line, string'("W_PSO C1_PSO C2_PSO RHO_MIN RHO_MAX VEL_MIN VEL_MAX DEADZONE SEARCH_RADIUS FOKKER_STEP_MIN FOKKER_STEP_MAX FUZZY_STEP FUZZY_EDGE"));
         writeline(result_file, out_line);
 
@@ -139,6 +140,8 @@ begin
             readline(data_file, line_buf);
             read(line_buf, volt_val);
             read(line_buf, curr_val);
+
+            power_now := (volt_val * curr_val) / 65536;
 
             wait until rising_edge(clk);
 
@@ -160,6 +163,9 @@ begin
             write(out_line, string'(" "));
 
             write(out_line, curr_val);
+            write(out_line, string'(" "));
+
+            write(out_line, power_now);
             write(out_line, string'(" "));
 
             write(out_line, to_integer(unsigned(duty_out)));
