@@ -1,0 +1,26 @@
+# ** Note: (vsim-220) 'C:/altera_lite/25.1std/questa_fse/win64/../modelsim.ini' is used as the ini file.
+# vsim -c work.tb_hybrid_pso_fuzzy_export -do "run -all; quit -f" -gDATASET_FILE=C:/Users/Ferna/Documents/FPGA_MPPT_FUZZY_PSO/dados_pre_processados/Apr_2023_dataset.txt -gRESULT_FILE=C:/Users/Ferna/Documents/FPGA_MPPT_FUZZY_PSO/results/Apr_2023_results.txt 
+# Start time: 13:40:04 on May 12,2026
+# ** Note: (vsim-3812) Design is being optimized...
+# ** Note: (vopt-220) 'C:/altera_lite/25.1std/questa_fse/win64/../modelsim.ini' is used as the ini file.
+# //  Questa Altera Starter FPGA Edition-64
+# //  Version 2025.2 win64 May 31 2025
+# //
+# // Unpublished work. Copyright 2025 Siemens
+# //
+# // This material contains trade secrets or otherwise confidential information
+# // owned by Siemens Industry Software Inc. or its affiliates (collectively,
+# // "SISW"), or its licensors. Access to and use of this information is strictly
+# // limited as set forth in the Customer's applicable agreements with SISW.
+# //
+# // This material may not be copied, distributed, or otherwise disclosed outside
+# // of the Customer's facilities without the express written permission of SISW,
+# // and may not be used in any way not expressly authorized by SISW.
+# //
+# Loading std.standard
+# Loading std.textio(body)
+# Loading ieee.std_logic_1164(body)
+# Loading ieee.numeric_std(body)
+# Loading work.hybrid_mppt_pkg(body)
+# Loading work.tb_hybrid_pso_fuzzy_export(sim)#1
+# run -all
