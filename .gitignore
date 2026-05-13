@@ -19,6 +19,8 @@ output_files/
 simulation/
 modelsim/
 work/
+graficos_uteis/
+dados_pre_processados/
 
 # -------------------------------------
 # Logs e Relatórios
