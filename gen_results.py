@@ -1,145 +1,261 @@
 from __future__ import annotations
 
 import argparse
-import subprocess
+import math
 from pathlib import Path
 
+import pandas as pd
 
-VHDL_FILES = [
-    "hybrid_mppt_pkg.vhd",
-    "mppt_measurement_unit.vhd",
-    "mppt_fuzzy_ffp_unit.vhd",
-    "pso_particle_update_unit.vhd",
-    "hybrid_pso_fuzzy_mppt.vhd",
-    "tb_hybrid_pso_fuzzy_export.vhd",
+
+DAILY_COLUMNS = [
+    "month",
+    "timestamp_date",
+    "n_samples",
+    "P_best_final",
+    "N_conv_98",
+    "T_conv_98_seconds",
+    "duty_std_after_conv",
+    "P_ripple_after_conv",
+    "mean_abs_error",
+    "std_abs_error",
+]
+
+GENERAL_COLUMNS = [
+    "month",
+    "n_days",
+    "P_best_final_mean",
+    "P_best_final_std",
+    "N_conv_98_mean",
+    "N_conv_98_std",
+    "T_conv_98_seconds_mean",
+    "T_conv_98_seconds_std",
+    "duty_std_after_conv_mean",
+    "duty_std_after_conv_std",
+    "P_ripple_after_conv_mean",
+    "P_ripple_after_conv_std",
+    "mean_abs_error_mean",
+    "mean_abs_error_std",
+    "std_abs_error_mean",
+    "std_abs_error_std",
 ]
 
 
-def run_cmd(cmd: list[str], cwd: Path) -> None:
-    print(" ".join(cmd))
-    subprocess.run(cmd, cwd=cwd, check=True)
+def parse_month_name(path: Path) -> str:
+    name = path.stem
+
+    if name.endswith("_results"):
+        name = name[: -len("_results")]
+
+    if name.startswith("resultados_hybrid_"):
+        name = name[len("resultados_hybrid_") :]
+
+    return name
 
 
-def compile_project(project_dir: Path) -> None:
-    run_cmd(["vlib", "work"], cwd=project_dir)
+def parse_hhmmss_to_seconds(value: object) -> int:
+    if pd.isna(value):
+        return 0
 
-    for file_name in VHDL_FILES:
-        run_cmd(["vcom", "-2008", file_name], cwd=project_dir)
+    text = str(value).strip()
+
+    if "." in text:
+        text = text.split(".", 1)[0]
+
+    text = "".join(ch for ch in text if ch.isdigit())
+
+    if not text:
+        return 0
+
+    text = text.zfill(6)
+
+    hours = int(text[-6:-4])
+    minutes = int(text[-4:-2])
+    seconds = int(text[-2:])
+
+    return hours * 3600 + minutes * 60 + seconds
 
 
-def run_simulation(
-    project_dir: Path,
-    dataset_file: Path,
-    result_file: Path,
-    settle_cycles: int,
-    w_pso: int,
-    c1_pso: int,
-    c2_pso: int,
-    rho_min: int,
-    rho_max: int,
-    vel_min: int,
-    vel_max: int,
-    deadzone: int,
-    search_radius: int,
-    fokker_step_min: int,
-    fokker_step_max: int,
-    fuzzy_step: int,
-    fuzzy_edge: int,
-) -> None:
-    result_file.parent.mkdir(parents=True, exist_ok=True)
+def std_or_zero(series: pd.Series) -> float:
+    series = pd.to_numeric(series, errors="coerce").dropna()
 
-    dataset_arg = dataset_file.as_posix()
-    result_arg = result_file.as_posix()
+    if len(series) < 2:
+        return 0.0
 
-    cmd = [
-        "vsim",
-        "-c",
-        "work.tb_hybrid_pso_fuzzy_export",
-        f"-gDATASET_FILE={dataset_arg}",
-        f"-gRESULT_FILE={result_arg}",
-        f"-gSETTLE_CYCLES_G={settle_cycles}",
-        f"-gW_PSO_G_TB={w_pso}",
-        f"-gC1_PSO_G_TB={c1_pso}",
-        f"-gC2_PSO_G_TB={c2_pso}",
-        f"-gRHO_MIN_G_TB={rho_min}",
-        f"-gRHO_MAX_G_TB={rho_max}",
-        f"-gVEL_MIN_G_TB={vel_min}",
-        f"-gVEL_MAX_G_TB={vel_max}",
-        f"-gDEADZONE_G_TB={deadzone}",
-        f"-gSEARCH_RADIUS_G_TB={search_radius}",
-        f"-gFOKKER_STEP_MIN_G_TB={fokker_step_min}",
-        f"-gFOKKER_STEP_MAX_G_TB={fokker_step_max}",
-        f"-gFUZZY_STEP_G_TB={fuzzy_step}",
-        f"-gFUZZY_EDGE_G_TB={fuzzy_edge}",
-        "-do",
-        "run -all; quit -f",
+    return float(series.std(ddof=1))
+
+
+def mean_or_zero(series: pd.Series) -> float:
+    series = pd.to_numeric(series, errors="coerce").dropna()
+
+    if len(series) == 0:
+        return 0.0
+
+    return float(series.mean())
+
+
+def read_result_file(path: Path) -> pd.DataFrame:
+    df = pd.read_csv(path, sep=r"\s+", engine="python")
+
+    required = {
+        "sample",
+        "timestamp_date",
+        "timestamp_time",
+        "power_now",
+        "duty",
+        "gbest_power",
+        "error",
+    }
+
+    missing = required - set(df.columns)
+
+    if missing:
+        raise ValueError(
+            f"{path.name} nao possui as colunas obrigatorias: {sorted(missing)}"
+        )
+
+    for col in ["sample", "timestamp_date", "timestamp_time", "power_now", "duty", "gbest_power", "error"]:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    df = df.dropna(subset=["sample", "timestamp_date", "timestamp_time"])
+    df["timestamp_date"] = df["timestamp_date"].astype(int)
+    df["timestamp_seconds"] = df["timestamp_time"].apply(parse_hhmmss_to_seconds)
+
+    return df
+
+
+def calculate_day_metrics(month: str, date_value: int, day_df: pd.DataFrame) -> dict[str, float | int | str]:
+    day_df = day_df.sort_values(["sample"]).copy()
+
+    n_samples = int(len(day_df))
+
+    if n_samples == 0:
+        return {
+            "month": month,
+            "timestamp_date": date_value,
+            "n_samples": 0,
+            "P_best_final": 0.0,
+            "N_conv_98": -1,
+            "T_conv_98_seconds": -1.0,
+            "duty_std_after_conv": 0.0,
+            "P_ripple_after_conv": 0.0,
+            "mean_abs_error": 0.0,
+            "std_abs_error": 0.0,
+        }
+
+    p_best_final = float(day_df["gbest_power"].max())
+    threshold = 0.98 * p_best_final
+
+    conv_df = day_df[day_df["gbest_power"] >= threshold]
+
+    if len(conv_df) == 0:
+        n_conv_98 = -1
+        t_conv_98 = -1.0
+        steady = day_df
+    else:
+        first_conv = conv_df.iloc[0]
+        first_sample = int(day_df.iloc[0]["sample"])
+        first_time = int(day_df.iloc[0]["timestamp_seconds"])
+
+        n_conv_98 = int(first_conv["sample"]) - first_sample
+        t_conv_98 = float(int(first_conv["timestamp_seconds"]) - first_time)
+
+        if t_conv_98 < 0:
+            t_conv_98 = 0.0
+
+        steady = day_df[day_df["sample"] >= first_conv["sample"]]
+
+    abs_error = day_df["error"].abs()
+
+    return {
+        "month": month,
+        "timestamp_date": int(date_value),
+        "n_samples": n_samples,
+        "P_best_final": p_best_final,
+        "N_conv_98": int(n_conv_98),
+        "T_conv_98_seconds": float(t_conv_98),
+        "duty_std_after_conv": std_or_zero(steady["duty"]),
+        "P_ripple_after_conv": std_or_zero(steady["power_now"]),
+        "mean_abs_error": mean_or_zero(abs_error),
+        "std_abs_error": std_or_zero(abs_error),
+    }
+
+
+def summarize_month(month: str, daily_df: pd.DataFrame) -> dict[str, float | int | str]:
+    summary: dict[str, float | int | str] = {
+        "month": month,
+        "n_days": int(len(daily_df)),
+    }
+
+    metric_cols = [
+        "P_best_final",
+        "N_conv_98",
+        "T_conv_98_seconds",
+        "duty_std_after_conv",
+        "P_ripple_after_conv",
+        "mean_abs_error",
+        "std_abs_error",
     ]
 
-    run_cmd(cmd, cwd=project_dir)
+    for col in metric_cols:
+        valid = pd.to_numeric(daily_df[col], errors="coerce")
+        valid = valid[valid >= 0].dropna()
+
+        summary[f"{col}_mean"] = float(valid.mean()) if len(valid) else 0.0
+        summary[f"{col}_std"] = float(valid.std(ddof=1)) if len(valid) > 1 else 0.0
+
+    return summary
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--project-dir", default=".", help="Pasta onde estão os arquivos VHDL.")
-    parser.add_argument("--dataset-dir", default="datasets", help="Pasta com os arquivos .txt de cada mês.")
-    parser.add_argument("--result-dir", default="results", help="Pasta de saída dos resultados.")
-    parser.add_argument("--compile", action="store_true", help="Compila os arquivos VHDL antes de simular.")
-
-    parser.add_argument("--settle-cycles", type=int, default=1)
-    parser.add_argument("--w-pso", type=int, default=50)
-    parser.add_argument("--c1-pso", type=int, default=50)
-    parser.add_argument("--c2-pso", type=int, default=40)
-    parser.add_argument("--rho-min", type=int, default=53)
-    parser.add_argument("--rho-max", type=int, default=56)
-    parser.add_argument("--vel-min", type=int, default=-20)
-    parser.add_argument("--vel-max", type=int, default=20)
-    parser.add_argument("--deadzone", type=int, default=2)
-    parser.add_argument("--search-radius", type=int, default=12)
-    parser.add_argument("--fokker-step-min", type=int, default=1)
-    parser.add_argument("--fokker-step-max", type=int, default=8)
-    parser.add_argument("--fuzzy-step", type=int, default=30)
-    parser.add_argument("--fuzzy-edge", type=int, default=90)
-
+    parser.add_argument("--results-dir", default="results")
     args = parser.parse_args()
 
-    project_dir = Path(args.project_dir).resolve()
-    dataset_dir = (project_dir / args.dataset_dir).resolve()
-    result_dir = (project_dir / args.result_dir).resolve()
+    results_dir = Path(args.results_dir).resolve()
 
-    if args.compile:
-        compile_project(project_dir)
+    if not results_dir.exists():
+        raise FileNotFoundError(f"Pasta de resultados nao encontrada: {results_dir}")
 
-    dataset_files = sorted(dataset_dir.glob("*.txt"))
+    result_files = sorted(results_dir.glob("*_results.txt"))
 
-    if not dataset_files:
-        raise FileNotFoundError(f"Nenhum .txt encontrado em: {dataset_dir}")
+    if not result_files:
+        raise FileNotFoundError(f"Nenhum arquivo *_results.txt encontrado em: {results_dir}")
 
-    for dataset_file in dataset_files:
-        result_file = result_dir / f"resultados_hybrid_{dataset_file.stem}.txt"
+    all_daily_rows: list[dict[str, float | int | str]] = []
+    general_rows: list[dict[str, float | int | str]] = []
 
-        print(f"\n=== Rodando dataset: {dataset_file.name} ===")
+    for result_file in result_files:
+        month = parse_month_name(result_file)
 
-        run_simulation(
-            project_dir=project_dir,
-            dataset_file=dataset_file,
-            result_file=result_file,
-            settle_cycles=args.settle_cycles,
-            w_pso=args.w_pso,
-            c1_pso=args.c1_pso,
-            c2_pso=args.c2_pso,
-            rho_min=args.rho_min,
-            rho_max=args.rho_max,
-            vel_min=args.vel_min,
-            vel_max=args.vel_max,
-            deadzone=args.deadzone,
-            search_radius=args.search_radius,
-            fokker_step_min=args.fokker_step_min,
-            fokker_step_max=args.fokker_step_max,
-            fuzzy_step=args.fuzzy_step,
-            fuzzy_edge=args.fuzzy_edge,
-        )
+        print(f"Calculando metricas por dia: {result_file.name}")
 
-    print("\nTodas as simulações terminaram.")
+        df = read_result_file(result_file)
+
+        daily_rows: list[dict[str, float | int | str]] = []
+
+        for date_value, day_df in df.groupby("timestamp_date", sort=True):
+            daily_rows.append(calculate_day_metrics(month, int(date_value), day_df))
+
+        daily_df = pd.DataFrame(daily_rows, columns=DAILY_COLUMNS)
+
+        month_daily_path = results_dir / f"{month}_daily_metrics.csv"
+        daily_df.to_csv(month_daily_path, index=False)
+
+        general_rows.append(summarize_month(month, daily_df))
+        all_daily_rows.extend(daily_rows)
+
+        print(f"Arquivo gerado: {month_daily_path}")
+
+    all_daily_df = pd.DataFrame(all_daily_rows, columns=DAILY_COLUMNS)
+    all_daily_path = results_dir / "metrics_daily_all.csv"
+    all_daily_df.to_csv(all_daily_path, index=False)
+
+    general_df = pd.DataFrame(general_rows, columns=GENERAL_COLUMNS)
+    general_path = results_dir / "metrics_general.csv"
+    general_df.to_csv(general_path, index=False)
+
+    print(f"Arquivo geral diario gerado: {all_daily_path}")
+    print(f"Resumo geral gerado: {general_path}")
 
 
 if __name__ == "__main__":
