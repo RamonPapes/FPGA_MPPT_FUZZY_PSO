@@ -8,6 +8,7 @@
 db/
 incremental_db/
 greybox_tmp/
+optimization_runs/
 hc_output/
 .qsys_edit/
 .ipcache/
