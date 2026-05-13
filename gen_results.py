@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import math
 from pathlib import Path
 
 import pandas as pd
@@ -102,7 +101,6 @@ def read_result_file(path: Path) -> pd.DataFrame:
         "timestamp_time",
         "power_now",
         "duty",
-        "gbest_power",
         "error",
     }
 
@@ -113,7 +111,16 @@ def read_result_file(path: Path) -> pd.DataFrame:
             f"{path.name} nao possui as colunas obrigatorias: {sorted(missing)}"
         )
 
-    for col in ["sample", "timestamp_date", "timestamp_time", "power_now", "duty", "gbest_power", "error"]:
+    numeric_cols = [
+        "sample",
+        "timestamp_date",
+        "timestamp_time",
+        "power_now",
+        "duty",
+        "error",
+    ]
+
+    for col in numeric_cols:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
     df = df.dropna(subset=["sample", "timestamp_date", "timestamp_time"])
@@ -142,27 +149,46 @@ def calculate_day_metrics(month: str, date_value: int, day_df: pd.DataFrame) -> 
             "std_abs_error": 0.0,
         }
 
-    p_best_final = float(day_df["gbest_power"].max())
+    # IMPORTANTE:
+    # Aqui a convergencia diaria NAO usa gbest_power do VHDL.
+    # O gbest_power do VHDL e acumulado ao longo da simulacao mensal.
+    # Como nao estamos resetando o controlador a cada dia, usar gbest_power
+    # causaria N_conv_98 = 0 em dias posteriores.
+    #
+    # Portanto, para manter a analise diaria sem rodar dia por dia,
+    # calculamos um "gbest local" apenas para a janela daquele dia:
+    # local_gbest_power[k] = max(power_now[0:k]) dentro do proprio dia.
+    #
+    # Isso mede convergencia diaria relativa ao sinal de potencia observado
+    # naquele dia, nao a memoria interna acumulada do PSO.
+    day_df["local_gbest_power"] = day_df["power_now"].cummax()
+
+    p_best_final = float(day_df["power_now"].max())
     threshold = 0.98 * p_best_final
 
-    conv_df = day_df[day_df["gbest_power"] >= threshold]
-
-    if len(conv_df) == 0:
+    if p_best_final <= 0:
         n_conv_98 = -1
         t_conv_98 = -1.0
         steady = day_df
     else:
-        first_conv = conv_df.iloc[0]
-        first_sample = int(day_df.iloc[0]["sample"])
-        first_time = int(day_df.iloc[0]["timestamp_seconds"])
+        conv_df = day_df[day_df["local_gbest_power"] >= threshold]
 
-        n_conv_98 = int(first_conv["sample"]) - first_sample
-        t_conv_98 = float(int(first_conv["timestamp_seconds"]) - first_time)
+        if len(conv_df) == 0:
+            n_conv_98 = -1
+            t_conv_98 = -1.0
+            steady = day_df
+        else:
+            first_conv = conv_df.iloc[0]
+            first_sample = int(day_df.iloc[0]["sample"])
+            first_time = int(day_df.iloc[0]["timestamp_seconds"])
 
-        if t_conv_98 < 0:
-            t_conv_98 = 0.0
+            n_conv_98 = int(first_conv["sample"]) - first_sample
+            t_conv_98 = float(int(first_conv["timestamp_seconds"]) - first_time)
 
-        steady = day_df[day_df["sample"] >= first_conv["sample"]]
+            if t_conv_98 < 0:
+                t_conv_98 = 0.0
+
+            steady = day_df[day_df["sample"] >= first_conv["sample"]]
 
     abs_error = day_df["error"].abs()
 
@@ -227,7 +253,7 @@ def main() -> None:
     for result_file in result_files:
         month = parse_month_name(result_file)
 
-        print(f"Calculando metricas por dia: {result_file.name}")
+        print(f"Calculando metricas por dia com gbest local: {result_file.name}")
 
         df = read_result_file(result_file)
 

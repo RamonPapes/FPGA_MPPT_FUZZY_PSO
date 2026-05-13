@@ -1,6 +1,6 @@
 # ** Note: (vsim-220) 'C:/altera_lite/25.1std/questa_fse/win64/../modelsim.ini' is used as the ini file.
 # vsim -c work.tb_hybrid_pso_fuzzy_export -do "run -all; quit -f" -gDATASET_FILE=C:/Users/Ferna/Documents/FPGA_MPPT_FUZZY_PSO/dados_pre_processados/Apr_2023_dataset.txt -gRESULT_FILE=C:/Users/Ferna/Documents/FPGA_MPPT_FUZZY_PSO/results/Apr_2023_results.txt 
-# Start time: 22:57:45 on May 12,2026
+# Start time: 23:19:10 on May 12,2026
 # ** Note: (vsim-8009) Loading existing optimized design _opt1
 # //  Questa Altera Starter FPGA Edition-64
 # //  Version 2025.2 win64 May 31 2025
@@ -29,5 +29,5 @@
 # Break in Process stim_proc at tb_hybrid_pso_fuzzy_export.vhd line 251
 # Stopped at tb_hybrid_pso_fuzzy_export.vhd line 251
 #  quit -f
-# End time: 23:02:00 on May 12,2026, Elapsed time: 0:04:15
+# End time: 23:23:24 on May 12,2026, Elapsed time: 0:04:14
 # Errors: 1, Warnings: 0

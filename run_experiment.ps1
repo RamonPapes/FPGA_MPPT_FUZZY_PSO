@@ -8,10 +8,15 @@ param(
     [string]$VoltageColumn = "MG-LV-MSB_AC_Voltage",
     [ValidateSet("W", "kW")]
     [string]$PowerUnit = "kW",
+    [int]$MaxParallel = 4,
     [switch]$CleanWork
 )
 
 $ErrorActionPreference = "Stop"
+
+if ($MaxParallel -lt 1) {
+    throw "MaxParallel deve ser maior ou igual a 1."
+}
 
 $ProjectRoot = (Resolve-Path $ProjectRoot).Path
 $ArchivePath = Join-Path $ProjectRoot $ArchiveDir
@@ -89,26 +94,159 @@ try {
         throw "Nenhum *_dataset.txt encontrado em: $PreprocessedPath"
     }
 
+    Write-Host ""
+    Write-Host "=== Rodando simulacoes em paralelo: $MaxParallel por vez ==="
+
+    $Jobs = @()
+    $Failures = @()
+
     foreach ($Dataset in $DatasetFiles) {
         $MonthName = [System.IO.Path]::GetFileNameWithoutExtension($Dataset.Name)
         $MonthName = $MonthName -replace "_dataset$", ""
 
         $ResultTxt = Join-Path $ResultsPath ($MonthName + "_results.txt")
+        $LogTxt    = Join-Path $ResultsPath ($MonthName + "_vsim.log")
+        $WlfFile   = Join-Path $ResultsPath ($MonthName + ".wlf")
+
+        if (Test-Path $ResultTxt) {
+            Remove-Item -Force $ResultTxt
+        }
+
+        if (Test-Path $LogTxt) {
+            Remove-Item -Force $LogTxt
+        }
+
+        if (Test-Path $WlfFile) {
+            Remove-Item -Force $WlfFile
+        }
 
         $DatasetArg = $Dataset.FullName.Replace("\", "/")
         $ResultArg  = $ResultTxt.Replace("\", "/")
+        $LogArg     = $LogTxt.Replace("\", "/")
+        $WlfArg     = $WlfFile.Replace("\", "/")
 
-        Write-Host ""
-        Write-Host "=== Rodando simulacao para: $MonthName ==="
+        while (($Jobs | Where-Object { $_.State -eq "Running" }).Count -ge $MaxParallel) {
+            $Done = Wait-Job -Job $Jobs -Any
 
-        vsim -c work.tb_hybrid_pso_fuzzy_export `
-            -gDATASET_FILE="$DatasetArg" `
-            -gRESULT_FILE="$ResultArg" `
-            -do "run -all; quit -f"
+            foreach ($Job in @($Done)) {
+                $Output = Receive-Job -Job $Job
 
-        if (-not (Test-Path $ResultTxt)) {
-            throw "Resultado nao foi gerado: $ResultTxt"
+                foreach ($Item in $Output) {
+                    if ($Item.Status -ne "OK") {
+                        $Failures += $Item
+                    }
+                }
+
+                Remove-Job -Job $Job
+                $Jobs = @($Jobs | Where-Object { $_.Id -ne $Job.Id })
+            }
         }
+
+        Write-Host "Spawn vsim: $MonthName"
+
+        $Job = Start-Job -Name $MonthName -ScriptBlock {
+            param(
+                $ProjectRootJob,
+                $MonthNameJob,
+                $DatasetArgJob,
+                $ResultArgJob,
+                $LogArgJob,
+                $WlfArgJob
+            )
+
+            Set-Location $ProjectRootJob
+
+            try {
+                & vsim `
+                    -c work.tb_hybrid_pso_fuzzy_export `
+                    -wlf $WlfArgJob `
+                    -l $LogArgJob `
+                    "-gDATASET_FILE=$DatasetArgJob" `
+                    "-gRESULT_FILE=$ResultArgJob" `
+                    -do "run -all; quit -f"
+
+                $ExitCode = $LASTEXITCODE
+
+                if ($ExitCode -ne 0) {
+                    [PSCustomObject]@{
+                        Month = $MonthNameJob
+                        Status = "ERROR"
+                        ExitCode = $ExitCode
+                        Result = $ResultArgJob
+                        Log = $LogArgJob
+                        Message = "vsim terminou com codigo $ExitCode"
+                    }
+                    return
+                }
+
+                if (-not (Test-Path $ResultArgJob)) {
+                    [PSCustomObject]@{
+                        Month = $MonthNameJob
+                        Status = "ERROR"
+                        ExitCode = 999
+                        Result = $ResultArgJob
+                        Log = $LogArgJob
+                        Message = "Arquivo de resultado nao foi gerado"
+                    }
+                    return
+                }
+
+                [PSCustomObject]@{
+                    Month = $MonthNameJob
+                    Status = "OK"
+                    ExitCode = 0
+                    Result = $ResultArgJob
+                    Log = $LogArgJob
+                    Message = "Simulacao concluida"
+                }
+            }
+            catch {
+                [PSCustomObject]@{
+                    Month = $MonthNameJob
+                    Status = "ERROR"
+                    ExitCode = 998
+                    Result = $ResultArgJob
+                    Log = $LogArgJob
+                    Message = $_.Exception.Message
+                }
+            }
+        } -ArgumentList $ProjectRoot, $MonthName, $DatasetArg, $ResultArg, $LogArg, $WlfArg
+
+        $Jobs += $Job
+    }
+
+    while ($Jobs.Count -gt 0) {
+        $Done = Wait-Job -Job $Jobs -Any
+
+        foreach ($Job in @($Done)) {
+            $Output = Receive-Job -Job $Job
+
+            foreach ($Item in $Output) {
+                if ($Item.Status -eq "OK") {
+                    Write-Host "OK: $($Item.Month)"
+                }
+                else {
+                    Write-Host "ERRO: $($Item.Month) -> $($Item.Message)"
+                    Write-Host "Log: $($Item.Log)"
+                    $Failures += $Item
+                }
+            }
+
+            Remove-Job -Job $Job
+            $Jobs = @($Jobs | Where-Object { $_.Id -ne $Job.Id })
+        }
+    }
+
+    if ($Failures.Count -gt 0) {
+        Write-Host ""
+        Write-Host "=== Falhas encontradas ==="
+
+        foreach ($Failure in $Failures) {
+            Write-Host "$($Failure.Month): $($Failure.Message)"
+            Write-Host "Log: $($Failure.Log)"
+        }
+
+        throw "$($Failures.Count) simulacao(oes) falharam."
     }
 
     Write-Host ""

@@ -20,6 +20,7 @@ simulation/
 modelsim/
 work/
 graficos_uteis/
+.venv/
 dados_pre_processados/
 
 # -------------------------------------
