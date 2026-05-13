@@ -55,6 +55,9 @@ set_global_assignment -name EDA_GENERATE_FUNCTIONAL_NETLIST OFF -section_id eda_
 set_global_assignment -name EDA_GENERATE_FUNCTIONAL_NETLIST OFF -section_id eda_board_design_signal_integrity
 set_global_assignment -name EDA_GENERATE_FUNCTIONAL_NETLIST OFF -section_id eda_board_design_boundary_scan
 set_global_assignment -name VHDL_FILE hybrid_mppt_pkg.vhd
+set_global_assignment -name VHDL_FILE mppt_measurement_unit.vhd
+set_global_assignment -name VHDL_FILE mppt_fuzzy_ffp_unit.vhd
+set_global_assignment -name VHDL_FILE pso_particle_update_unit.vhd
 set_global_assignment -name VHDL_FILE hybrid_pso_fuzzy_mppt.vhd
 set_global_assignment -name PARTITION_NETLIST_TYPE SOURCE -section_id Top
 set_global_assignment -name PARTITION_FITTER_PRESERVATION_LEVEL PLACEMENT_AND_ROUTING -section_id Top

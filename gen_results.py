@@ -6,9 +6,12 @@ from pathlib import Path
 
 
 VHDL_FILES = [
-    "hybrid_mppt_pkg_generic.vhd",
-    "hybrid_pso_fuzzy_mppt_generic.vhd",
-    "tb_hybrid_pso_fuzzy_export_power.vhd",
+    "hybrid_mppt_pkg.vhd",
+    "mppt_measurement_unit.vhd",
+    "mppt_fuzzy_ffp_unit.vhd",
+    "pso_particle_update_unit.vhd",
+    "hybrid_pso_fuzzy_mppt.vhd",
+    "tb_hybrid_pso_fuzzy_export.vhd",
 ]
 
 

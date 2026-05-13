@@ -6,20 +6,20 @@ use work.hybrid_mppt_pkg.ALL;
 
 entity hybrid_pso_fuzzy_mppt is
     generic (
-        SETTLE_CYCLES    : integer := 1000;
-        W_PSO_G          : integer := 50;
-        C1_PSO_G         : integer := 50;
-        C2_PSO_G         : integer := 40;
-        RHO_MIN_G        : integer := 53;
-        RHO_MAX_G        : integer := 56;
-        VEL_MIN_G        : integer := -20;
-        VEL_MAX_G        : integer := 20;
-        DEADZONE_G       : integer := 2;
-        SEARCH_RADIUS_G  : integer := 12;
-        FOKKER_STEP_MIN_G: integer := 1;
-        FOKKER_STEP_MAX_G: integer := 8;
-        FUZZY_STEP_G     : integer := 30;
-        FUZZY_EDGE_G     : integer := 90
+        SETTLE_CYCLES     : integer := 1000;
+        W_PSO_G           : integer := 50;
+        C1_PSO_G          : integer := 50;
+        C2_PSO_G          : integer := 40;
+        RHO_MIN_G         : integer := 53;
+        RHO_MAX_G         : integer := 56;
+        VEL_MIN_G         : integer := -20;
+        VEL_MAX_G         : integer := 20;
+        DEADZONE_G        : integer := 2;
+        SEARCH_RADIUS_G   : integer := 12;
+        FOKKER_STEP_MIN_G : integer := 1;
+        FOKKER_STEP_MAX_G : integer := 8;
+        FUZZY_STEP_G      : integer := 30;
+        FUZZY_EDGE_G      : integer := 90
     );
     port (
         clk              : in  std_logic;
@@ -40,7 +40,15 @@ entity hybrid_pso_fuzzy_mppt is
     );
 end hybrid_pso_fuzzy_mppt;
 
-architecture Behavioral of hybrid_pso_fuzzy_mppt is
+architecture Structural of hybrid_pso_fuzzy_mppt is
+
+    type top_state_type is (
+        APPLY_PARTICLE,
+        WAIT_SETTLE,
+        SAMPLE_AND_UPDATE,
+        PREPARE_SWARM,
+        UPDATE_SWARM
+    );
 
     function init_particle_positions return particle_array is
         variable arr  : particle_array;
@@ -67,65 +75,130 @@ architecture Behavioral of hybrid_pso_fuzzy_mppt is
     constant INIT_POS : particle_array := init_particle_positions;
     constant INIT_VEL : particle_array := init_particle_velocities;
 
-    signal particle_pos   : particle_array := INIT_POS;
-    signal particle_vel   : particle_array := INIT_VEL;
-    signal pbest_pos      : particle_array := INIT_POS;
-    signal pbest_power    : particle_array := (others => 0);
+    signal particle_pos      : particle_array := INIT_POS;
+    signal particle_vel      : particle_array := INIT_VEL;
+    signal pbest_pos         : particle_array := INIT_POS;
+    signal pbest_power       : particle_array := (others => 0);
 
-    signal gbest_pos      : integer := 50;
-    signal gbest_power    : integer := 0;
+    signal next_particle_pos : particle_array := INIT_POS;
+    signal next_particle_vel : particle_array := INIT_VEL;
 
-    signal current_idx    : integer range 0 to N_PARTICLES - 1 := 0;
-    signal wait_counter   : integer := 0;
+    signal rho1_arr          : particle_array := (others => 53);
+    signal rho2_arr          : particle_array := (others => 53);
 
-    signal prev_power     : integer := 0;
-    signal prev_voltage   : integer := 0;
-    signal prev_error     : integer := 0;
+    signal gbest_pos         : integer := 50;
+    signal gbest_power       : integer := 0;
 
-    signal error_reg      : integer range -100 to 100 := 0;
-    signal delta_e_reg    : integer range -100 to 100 := 0;
-    signal fuzzy_delta    : integer := 0;
+    signal current_idx       : integer range 0 to N_PARTICLES - 1 := 0;
+    signal wait_counter      : integer := 0;
 
-    signal duty_reg       : integer range 0 to 100 := 50;
-    signal pno_candidate  : integer range 0 to 100 := 50;
-    signal search_center  : integer range 0 to 100 := 50;
-    signal fokker_step    : integer := 1;
+    signal prev_power        : integer := 0;
+    signal prev_voltage      : integer := 0;
+    signal prev_error        : integer := 0;
 
-    signal lfsr           : unsigned(15 downto 0) := x"ACE1";
+    signal power_now_sig     : integer := 0;
+    signal voltage_now_sig   : integer := 0;
+    signal delta_p_sig       : integer := 0;
+    signal delta_v_sig       : integer := 0;
+    signal error_next_sig    : integer := 0;
+    signal delta_e_next_sig  : integer := 0;
 
-    signal state          : state_type := APPLY_PARTICLE;
+    signal fuzzy_next_sig    : integer := 0;
+    signal ffp_step_sig      : integer := 1;
+    signal refined_duty_sig  : integer := 50;
+
+    signal error_reg         : integer range -100 to 100 := 0;
+    signal delta_e_reg       : integer range -100 to 100 := 0;
+    signal fuzzy_delta       : integer := 0;
+
+    signal duty_reg          : integer range 0 to 100 := 50;
+    signal pno_candidate     : integer range 0 to 100 := 50;
+    signal search_center     : integer range 0 to 100 := 50;
+    signal fokker_step       : integer := 1;
+
+    signal search_low        : integer := 38;
+    signal search_high       : integer := 62;
+
+    signal lfsr              : unsigned(15 downto 0) := x"ACE1";
+
+    signal state             : top_state_type := APPLY_PARTICLE;
 
 begin
 
+    search_low  <= clamp(search_center - SEARCH_RADIUS_G, DUTY_MIN, DUTY_MAX);
+    search_high <= clamp(search_center + SEARCH_RADIUS_G, DUTY_MIN, DUTY_MAX);
+
+    u_measurement: entity work.mppt_measurement_unit
+        port map (
+            current_in     => current_in,
+            voltage_in     => voltage_in,
+            prev_power     => prev_power,
+            prev_voltage   => prev_voltage,
+            prev_error     => prev_error,
+
+            power_now      => power_now_sig,
+            voltage_now    => voltage_now_sig,
+            delta_p        => delta_p_sig,
+            delta_v        => delta_v_sig,
+            error_next     => error_next_sig,
+            delta_e_next   => delta_e_next_sig
+        );
+
+    u_fuzzy_ffp: entity work.mppt_fuzzy_ffp_unit
+        generic map (
+            DEADZONE_G        => DEADZONE_G,
+            FOKKER_STEP_MIN_G => FOKKER_STEP_MIN_G,
+            FOKKER_STEP_MAX_G => FOKKER_STEP_MAX_G,
+            FUZZY_STEP_G      => FUZZY_STEP_G,
+            FUZZY_EDGE_G      => FUZZY_EDGE_G
+        )
+        port map (
+            duty_in       => duty_reg,
+            delta_p       => delta_p_sig,
+            delta_v       => delta_v_sig,
+            error_in      => error_next_sig,
+            delta_e_in    => delta_e_next_sig,
+
+            fuzzy_delta   => fuzzy_next_sig,
+            fokker_step   => ffp_step_sig,
+            refined_duty  => refined_duty_sig
+        );
+
+    gen_particle_update: for i in 0 to N_PARTICLES - 1 generate
+        u_particle_update: entity work.pso_particle_update_unit
+            generic map (
+                W_PSO_G   => W_PSO_G,
+                C1_PSO_G  => C1_PSO_G,
+                C2_PSO_G  => C2_PSO_G,
+                VEL_MIN_G => VEL_MIN_G,
+                VEL_MAX_G => VEL_MAX_G
+            )
+            port map (
+                particle_pos_in  => particle_pos(i),
+                particle_vel_in  => particle_vel(i),
+                pbest_pos_in     => pbest_pos(i),
+                gbest_pos_in     => gbest_pos,
+                rho1_in          => rho1_arr(i),
+                rho2_in          => rho2_arr(i),
+                search_low_in    => search_low,
+                search_high_in   => search_high,
+
+                particle_pos_out => next_particle_pos(i),
+                particle_vel_out => next_particle_vel(i)
+            );
+    end generate;
+
     process(clk, reset)
-        variable power_now       : integer;
-        variable voltage_now     : integer;
-        variable delta_p         : integer;
-        variable delta_v         : integer;
-        variable error_raw       : integer;
-        variable error_next      : integer;
-        variable delta_e_next    : integer;
-        variable fuzzy_next      : integer;
-
-        variable rho1            : integer;
-        variable rho2            : integer;
-        variable v_new           : integer;
-        variable p_new           : integer;
-        variable cognitive       : integer;
-        variable social          : integer;
-
-        variable lfsr_var        : unsigned(15 downto 0);
-        variable pno_dir         : integer;
-        variable ffp_step        : integer;
-        variable refined_duty    : integer;
-        variable search_low      : integer;
-        variable search_high     : integer;
+        variable lfsr_var : unsigned(15 downto 0);
     begin
         if reset = '1' then
             particle_pos <= INIT_POS;
             particle_vel <= INIT_VEL;
             pbest_pos    <= INIT_POS;
             pbest_power  <= (others => 0);
+
+            rho1_arr     <= (others => 53);
+            rho2_arr     <= (others => 53);
 
             gbest_pos    <= 50;
             gbest_power  <= 0;
@@ -141,11 +214,11 @@ begin
             delta_e_reg  <= 0;
             fuzzy_delta  <= 0;
 
-            duty_reg     <= 50;
+            duty_reg      <= 50;
             pno_candidate <= 50;
             search_center <= 50;
             fokker_step   <= 1;
-            duty_out     <= std_logic_vector(to_unsigned(50, 8));
+            duty_out      <= std_logic_vector(to_unsigned(50, 8));
 
             store_valid  <= '0';
 
@@ -156,7 +229,6 @@ begin
             store_valid <= '0';
 
             if enable = '1' then
-
                 case state is
 
                     when APPLY_PARTICLE =>
@@ -180,126 +252,63 @@ begin
                         end if;
 
                     when SAMPLE_AND_UPDATE =>
-                        voltage_now := to_integer(voltage_in);
-                        power_now := (to_integer(current_in) * to_integer(voltage_in)) / 65536;
+                        error_reg <= clamp(error_next_sig, -100, 100);
+                        delta_e_reg <= clamp(delta_e_next_sig, -100, 100);
+                        fuzzy_delta <= fuzzy_next_sig;
+                        fokker_step <= ffp_step_sig;
+                        pno_candidate <= refined_duty_sig;
 
-                        delta_p := power_now - prev_power;
-                        delta_v := voltage_now - prev_voltage;
-
-                        if abs_int(delta_v) < 4 then
-                            error_raw := 0;
-                        else
-                            error_raw := (delta_p * 100) / delta_v;
-                        end if;
-
-                        error_next := clamp(error_raw, -100, 100);
-                        delta_e_next := clamp(error_next - prev_error, -100, 100);
-                        fuzzy_next := fuzzy_compute(
-                            error_next,
-                            delta_e_next,
-                            DEADZONE_G,
-                            FUZZY_STEP_G,
-                            FUZZY_EDGE_G
-                        );
-
-                        pno_dir := pno_direction(delta_p, delta_v);
-                        if pno_dir = 0 then
-                            pno_dir := sign_int(fuzzy_next);
-                        end if;
-                        if pno_dir = 0 then
-                            pno_dir := 1;
-                        end if;
-
-                        ffp_step := fokker_planck_step(
-                            error_next,
-                            delta_e_next,
-                            DEADZONE_G,
-                            FOKKER_STEP_MIN_G,
-                            FOKKER_STEP_MAX_G,
-                            FUZZY_STEP_G,
-                            FUZZY_EDGE_G
-                        );
-
-                        refined_duty := clamp(
-                            duty_reg + (pno_dir * ffp_step),
-                            DUTY_MIN,
-                            DUTY_MAX
-                        );
-
-                        error_reg <= error_next;
-                        delta_e_reg <= delta_e_next;
-                        fuzzy_delta <= fuzzy_next;
-                        fokker_step <= ffp_step;
-                        pno_candidate <= refined_duty;
-
-                        if power_now > pbest_power(current_idx) then
-                            pbest_power(current_idx) <= power_now;
+                        if power_now_sig > pbest_power(current_idx) then
+                            pbest_power(current_idx) <= power_now_sig;
                             pbest_pos(current_idx) <= duty_reg;
                         end if;
 
-                        if power_now > gbest_power then
-                            gbest_power <= power_now;
+                        if power_now_sig > gbest_power then
+                            gbest_power <= power_now_sig;
                             gbest_pos <= duty_reg;
                         end if;
 
-                        prev_power <= power_now;
-                        prev_voltage <= voltage_now;
-                        prev_error <= error_next;
+                        prev_power <= power_now_sig;
+                        prev_voltage <= voltage_now_sig;
+                        prev_error <= clamp(error_next_sig, -100, 100);
 
                         store_valid <= '1';
 
                         if current_idx = N_PARTICLES - 1 then
                             current_idx <= 0;
-                            state <= UPDATE_SWARM;
+                            state <= PREPARE_SWARM;
                         else
                             current_idx <= current_idx + 1;
                             state <= APPLY_PARTICLE;
                         end if;
 
-                    when UPDATE_SWARM =>
+                    when PREPARE_SWARM =>
                         lfsr_var := lfsr;
-
-                        search_low := clamp(search_center - SEARCH_RADIUS_G, DUTY_MIN, DUTY_MAX);
-                        search_high := clamp(search_center + SEARCH_RADIUS_G, DUTY_MIN, DUTY_MAX);
 
                         for i in 0 to N_PARTICLES - 1 loop
                             lfsr_var := next_lfsr(lfsr_var);
-                            rho1 := rand_rho(lfsr_var, RHO_MIN_G, RHO_MAX_G);
+                            rho1_arr(i) <= rand_rho(lfsr_var, RHO_MIN_G, RHO_MAX_G);
 
                             lfsr_var := next_lfsr(lfsr_var);
-                            rho2 := rand_rho(lfsr_var, RHO_MIN_G, RHO_MAX_G);
+                            rho2_arr(i) <= rand_rho(lfsr_var, RHO_MIN_G, RHO_MAX_G);
+                        end loop;
 
-                            cognitive :=
-                                (C1_PSO_G * rho1 * (pbest_pos(i) - particle_pos(i))) / 10000;
+                        lfsr <= lfsr_var;
+                        state <= UPDATE_SWARM;
 
-                            social :=
-                                (C2_PSO_G * rho2 * (gbest_pos - particle_pos(i))) / 10000;
-
-                            v_new :=
-                                ((W_PSO_G * particle_vel(i)) / 100) +
-                                cognitive +
-                                social;
-
-                            v_new := clamp(v_new, VEL_MIN_G, VEL_MAX_G);
-
-                            p_new := particle_pos(i) + v_new;
-                            p_new := clamp(p_new, search_low, search_high);
-                            p_new := clamp(p_new, DUTY_MIN, DUTY_MAX);
-
-                            particle_vel(i) <= v_new;
-                            particle_pos(i) <= p_new;
+                    when UPDATE_SWARM =>
+                        for i in 0 to N_PARTICLES - 1 loop
+                            particle_vel(i) <= next_particle_vel(i);
+                            particle_pos(i) <= next_particle_pos(i);
                         end loop;
 
                         particle_pos(0) <= pno_candidate;
                         particle_vel(0) <= 0;
                         search_center <= pno_candidate;
 
-                        lfsr <= lfsr_var;
-
                         state <= APPLY_PARTICLE;
 
                 end case;
-
             end if;
         end if;
     end process;
@@ -310,4 +319,4 @@ begin
     delta_e_out     <= delta_e_reg;
     fuzzy_delta_out <= fuzzy_delta;
 
-end Behavioral;
+end Structural;

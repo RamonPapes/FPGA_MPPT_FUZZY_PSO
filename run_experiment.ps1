@@ -77,6 +77,9 @@ try {
     }
 
     vcom -2008 "hybrid_mppt_pkg.vhd"
+    vcom -2008 "mppt_measurement_unit.vhd"
+    vcom -2008 "mppt_fuzzy_ffp_unit.vhd"
+    vcom -2008 "pso_particle_update_unit.vhd"
     vcom -2008 "hybrid_pso_fuzzy_mppt.vhd"
     vcom -2008 "tb_hybrid_pso_fuzzy_export.vhd"
 

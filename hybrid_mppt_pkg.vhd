@@ -17,6 +17,7 @@ package hybrid_mppt_pkg is
         APPLY_PARTICLE,
         WAIT_SETTLE,
         SAMPLE_AND_UPDATE,
+        PREPARE_SWARM,
         UPDATE_SWARM
     );
 
@@ -31,6 +32,7 @@ package hybrid_mppt_pkg is
     );
 
     function clamp(x, low, high : integer) return integer;
+    function max_int(a, b : integer) return integer;
     function min_int(a, b : integer) return integer;
     function abs_int(x : integer) return integer;
     function sign_int(x : integer) return integer;
@@ -82,6 +84,15 @@ package body hybrid_mppt_pkg is
             return high;
         else
             return x;
+        end if;
+    end function;
+
+    function max_int(a, b : integer) return integer is
+    begin
+        if a > b then
+            return a;
+        else
+            return b;
         end if;
     end function;
 
