@@ -115,6 +115,8 @@ begin
         variable line_buf : line;
         variable out_line : line;
 
+        variable timestamp_date : integer;
+        variable timestamp_time : integer;
         variable volt_val   : integer;
         variable curr_val   : integer;
         variable power_now  : integer;
@@ -131,13 +133,15 @@ begin
 
         wait until rising_edge(clk);
 
-        write(out_line, string'("sample voltage current power_now duty gbest_duty gbest_power error delta_e fuzzy_delta "));
+        write(out_line, string'("sample timestamp_date timestamp_time voltage current power_now duty gbest_duty gbest_power error delta_e fuzzy_delta "));
         write(out_line, string'("W_PSO C1_PSO C2_PSO RHO_MIN RHO_MAX VEL_MIN VEL_MAX DEADZONE SEARCH_RADIUS FOKKER_STEP_MIN FOKKER_STEP_MAX FUZZY_STEP FUZZY_EDGE"));
         writeline(result_file, out_line);
 
         while not endfile(data_file) loop
 
             readline(data_file, line_buf);
+            read(line_buf, timestamp_date);
+            read(line_buf, timestamp_time);
             read(line_buf, volt_val);
             read(line_buf, curr_val);
 
@@ -157,6 +161,12 @@ begin
             wait for 1 ns;
 
             write(out_line, sample_idx);
+            write(out_line, string'(" "));
+
+            write(out_line, timestamp_date);
+            write(out_line, string'(" "));
+
+            write(out_line, timestamp_time);
             write(out_line, string'(" "));
 
             write(out_line, volt_val);

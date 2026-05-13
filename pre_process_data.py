@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+from datetime import datetime
 import math
 from pathlib import Path
 
@@ -44,6 +45,32 @@ def clamp_int16(value: int) -> int:
     return value
 
 
+def parse_timestamp(value: str) -> tuple[int, int] | None:
+    if value is None:
+        return None
+
+    text = str(value).strip().replace('"', '').replace("'", "")
+    if not text:
+        return None
+
+    formats = (
+        "%Y/%m/%d %H:%M:%S",
+        "%Y-%m-%d %H:%M:%S",
+        "%Y/%m/%dT%H:%M:%S",
+        "%Y-%m-%dT%H:%M:%S",
+    )
+
+    for fmt in formats:
+        try:
+            timestamp = datetime.strptime(text, fmt)
+        except ValueError:
+            continue
+
+        return int(timestamp.strftime("%Y%m%d")), int(timestamp.strftime("%H%M%S"))
+
+    return None
+
+
 def detect_dialect(csv_path: Path) -> csv.Dialect:
     sample = csv_path.read_text(encoding="utf-8-sig", errors="ignore")[:4096]
 
@@ -56,6 +83,7 @@ def detect_dialect(csv_path: Path) -> csv.Dialect:
 def convert_csv(
     csv_path: Path,
     output_path: Path,
+    timestamp_col: str,
     power_col: str,
     voltage_col: str,
     power_unit: str,
@@ -101,6 +129,12 @@ def convert_csv(
                 f"Colunas disponiveis: {fields}"
             )
 
+        if timestamp_col not in fields:
+            raise ValueError(
+                f"Coluna de timestamp nao encontrada em {csv_path.name}: {timestamp_col}. "
+                f"Colunas disponiveis: {fields}"
+            )
+
         if voltage_col not in fields:
             raise ValueError(
                 f"Coluna de tensao nao encontrada em {csv_path.name}: {voltage_col}. "
@@ -110,10 +144,11 @@ def convert_csv(
         for row in normalized_rows:
             total_rows += 1
 
+            timestamp = parse_timestamp(row.get(timestamp_col))
             power = parse_number(row.get(power_col))
             voltage = parse_number(row.get(voltage_col))
 
-            if power is None or voltage is None:
+            if timestamp is None or power is None or voltage is None:
                 skipped_rows += 1
                 continue
 
@@ -136,7 +171,8 @@ def convert_csv(
             voltage_int = clamp_int16(int(round(voltage * voltage_scale)))
             current_int = clamp_int16(int(round(current * current_scale)))
 
-            output_lines.append(f"{voltage_int} {current_int}")
+            timestamp_date, timestamp_time = timestamp
+            output_lines.append(f"{timestamp_date} {timestamp_time} {voltage_int} {current_int}")
             valid_rows += 1
 
     if valid_rows == 0:
@@ -158,6 +194,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--archive-dir", default="archive")
     parser.add_argument("--output-dir", default="dados_pre_processados")
+    parser.add_argument("--timestamp-col", default="Timestamp")
     parser.add_argument("--power-col", default="PVPCS_Active_Power")
     parser.add_argument("--voltage-col", default="MG-LV-MSB_AC_Voltage")
     parser.add_argument("--power-unit", choices=["W", "kW", "w", "kw"], default="kW")
@@ -192,6 +229,7 @@ def main() -> None:
         report = convert_csv(
             csv_path=csv_path,
             output_path=output_path,
+            timestamp_col=args.timestamp_col,
             power_col=args.power_col,
             voltage_col=args.voltage_col,
             power_unit=args.power_unit,

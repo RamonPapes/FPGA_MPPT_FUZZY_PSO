@@ -1,7 +1,7 @@
 # ** Note: (vsim-220) 'C:/altera_lite/25.1std/questa_fse/win64/../modelsim.ini' is used as the ini file.
 # vsim -c work.tb_hybrid_pso_fuzzy_export -do "run -all; quit -f" -gDATASET_FILE=C:/Users/Ferna/Documents/FPGA_MPPT_FUZZY_PSO/dados_pre_processados/Apr_2023_dataset.txt -gRESULT_FILE=C:/Users/Ferna/Documents/FPGA_MPPT_FUZZY_PSO/results/Apr_2023_results.txt 
-# Start time: 13:40:04 on May 12,2026
-# ** Note: (vsim-3812) Design is being optimized...
+# Start time: 21:39:58 on May 12,2026
+# ** Note: (vsim-3813) Design is being optimized due to module recompilation...
 # ** Note: (vopt-220) 'C:/altera_lite/25.1std/questa_fse/win64/../modelsim.ini' is used as the ini file.
 # //  Questa Altera Starter FPGA Edition-64
 # //  Version 2025.2 win64 May 31 2025
@@ -24,3 +24,8 @@
 # Loading work.hybrid_mppt_pkg(body)
 # Loading work.tb_hybrid_pso_fuzzy_export(sim)#1
 # run -all
+# Break key hit
+# Simulation stop requested.
+#  quit -f
+# End time: 21:40:44 on May 12,2026, Elapsed time: 0:00:46
+# Errors: 0, Warnings: 0
