@@ -10,7 +10,8 @@ entity mppt_fuzzy_ffp_unit is
         FOKKER_STEP_MIN_G : integer := 1;
         FOKKER_STEP_MAX_G : integer := 8;
         FUZZY_STEP_G      : integer := 30;
-        FUZZY_EDGE_G      : integer := 90
+        FUZZY_EDGE_G      : integer := 90;
+        DUTY_DIRECTION_G  : integer := -1
     );
     port (
         duty_in       : in  integer;
@@ -60,7 +61,7 @@ begin
             pno_dir := 1;
         end if;
 
-        refined_next := clamp(duty_in + (pno_dir * step_next), DUTY_MIN, DUTY_MAX);
+        refined_next := clamp(duty_in + (DUTY_DIRECTION_G * pno_dir * step_next), DUTY_MIN, DUTY_MAX);
 
         fuzzy_delta <= fuzzy_next;
         fokker_step <= step_next;

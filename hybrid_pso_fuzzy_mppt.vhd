@@ -19,7 +19,10 @@ entity hybrid_pso_fuzzy_mppt is
         FOKKER_STEP_MIN_G : integer := 1;
         FOKKER_STEP_MAX_G : integer := 8;
         FUZZY_STEP_G      : integer := 30;
-        FUZZY_EDGE_G      : integer := 90
+        FUZZY_EDGE_G      : integer := 90;
+        POWER_SCALE_DEN_G : integer := 2048;
+        DUTY_DIRECTION_G  : integer := -1;
+        SEARCH_CENTER_MODE_G : integer := 1
     );
     port (
         clk              : in  std_logic;
@@ -129,6 +132,9 @@ begin
     search_high <= clamp(search_center + SEARCH_RADIUS_G, DUTY_MIN, DUTY_MAX);
 
     u_measurement: entity work.mppt_measurement_unit
+        generic map (
+            POWER_SCALE_DEN_G => POWER_SCALE_DEN_G
+        )
         port map (
             current_in     => current_in,
             voltage_in     => voltage_in,
@@ -150,7 +156,8 @@ begin
             FOKKER_STEP_MIN_G => FOKKER_STEP_MIN_G,
             FOKKER_STEP_MAX_G => FOKKER_STEP_MAX_G,
             FUZZY_STEP_G      => FUZZY_STEP_G,
-            FUZZY_EDGE_G      => FUZZY_EDGE_G
+            FUZZY_EDGE_G      => FUZZY_EDGE_G,
+            DUTY_DIRECTION_G  => DUTY_DIRECTION_G
         )
         port map (
             duty_in       => duty_reg,
@@ -283,6 +290,14 @@ begin
                         end if;
 
                     when PREPARE_SWARM =>
+                        if SEARCH_CENTER_MODE_G = 0 then
+                            search_center <= pno_candidate;
+                        elsif SEARCH_CENTER_MODE_G = 1 then
+                            search_center <= gbest_pos;
+                        else
+                            search_center <= clamp((gbest_pos + pno_candidate) / 2, DUTY_MIN, DUTY_MAX);
+                        end if;
+
                         lfsr_var := lfsr;
 
                         for i in 0 to N_PARTICLES - 1 loop

@@ -23,7 +23,10 @@ entity tb_hybrid_pso_fuzzy_export is
         FOKKER_STEP_MIN_G_TB : integer := 1;
         FOKKER_STEP_MAX_G_TB : integer := 8;
         FUZZY_STEP_G_TB      : integer := 30;
-        FUZZY_EDGE_G_TB      : integer := 90
+        FUZZY_EDGE_G_TB      : integer := 90;
+        POWER_SCALE_DEN_G_TB : integer := 2048;
+        DUTY_DIRECTION_G_TB  : integer := -1;
+        SEARCH_CENTER_MODE_G_TB : integer := 1
     );
 end tb_hybrid_pso_fuzzy_export;
 
@@ -76,7 +79,10 @@ begin
             FOKKER_STEP_MIN_G => FOKKER_STEP_MIN_G_TB,
             FOKKER_STEP_MAX_G => FOKKER_STEP_MAX_G_TB,
             FUZZY_STEP_G      => FUZZY_STEP_G_TB,
-            FUZZY_EDGE_G      => FUZZY_EDGE_G_TB
+            FUZZY_EDGE_G      => FUZZY_EDGE_G_TB,
+            POWER_SCALE_DEN_G => POWER_SCALE_DEN_G_TB,
+            DUTY_DIRECTION_G  => DUTY_DIRECTION_G_TB,
+            SEARCH_CENTER_MODE_G => SEARCH_CENTER_MODE_G_TB
         )
         port map (
             clk             => clk,

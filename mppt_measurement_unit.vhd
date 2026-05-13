@@ -5,6 +5,9 @@ use IEEE.NUMERIC_STD.ALL;
 use work.hybrid_mppt_pkg.ALL;
 
 entity mppt_measurement_unit is
+    generic (
+        POWER_SCALE_DEN_G : integer := 2048
+    );
     port (
         current_in    : in  signed(15 downto 0);
         voltage_in    : in  signed(15 downto 0);
@@ -34,7 +37,13 @@ begin
         variable delta_e_next_v : integer;
     begin
         voltage_now_v := to_integer(voltage_in);
-        power_now_v := (to_integer(current_in) * voltage_now_v) / 65536;
+        
+        if POWER_SCALE_DEN_G <= 0 then
+            power_now_v := (to_integer(current_in) * voltage_now_v) / 1;
+        else
+            power_now_v := (to_integer(current_in) * voltage_now_v) / POWER_SCALE_DEN_G;
+        end if;
+        
         delta_p_v := power_now_v - prev_power;
         delta_v_v := voltage_now_v - prev_voltage;
 

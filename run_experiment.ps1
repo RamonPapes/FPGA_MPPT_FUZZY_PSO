@@ -132,8 +132,15 @@ try {
                 $Output = Receive-Job -Job $Job
 
                 foreach ($Item in $Output) {
-                    if ($Item.Status -ne "OK") {
-                        $Failures += $Item
+                    if ($Item -is [pscustomobject] -and $Item.PSObject.Properties.Name -contains "Status") {
+                        if ($Item.Status -eq "OK") {
+                            Write-Host "OK: $($Item.Month)"
+                        }
+                        else {
+                            Write-Host "ERRO: $($Item.Month) -> $($Item.Message)"
+                            Write-Host "Log: $($Item.Log)"
+                            $Failures += $Item
+                        }
                     }
                 }
 
@@ -163,7 +170,7 @@ try {
                     -l $LogArgJob `
                     "-gDATASET_FILE=$DatasetArgJob" `
                     "-gRESULT_FILE=$ResultArgJob" `
-                    -do "run -all; quit -f"
+                    -do "run -all; quit -f" *> $null
 
                 $ExitCode = $LASTEXITCODE
 
@@ -222,13 +229,15 @@ try {
             $Output = Receive-Job -Job $Job
 
             foreach ($Item in $Output) {
-                if ($Item.Status -eq "OK") {
-                    Write-Host "OK: $($Item.Month)"
-                }
-                else {
-                    Write-Host "ERRO: $($Item.Month) -> $($Item.Message)"
-                    Write-Host "Log: $($Item.Log)"
-                    $Failures += $Item
+                if ($Item -is [pscustomobject] -and $Item.PSObject.Properties.Name -contains "Status") {
+                    if ($Item.Status -eq "OK") {
+                        Write-Host "OK: $($Item.Month)"
+                    }
+                    else {
+                        Write-Host "ERRO: $($Item.Month) -> $($Item.Message)"
+                        Write-Host "Log: $($Item.Log)"
+                        $Failures += $Item
+                    }
                 }
             }
 
