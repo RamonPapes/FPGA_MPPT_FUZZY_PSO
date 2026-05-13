@@ -1,7 +1,7 @@
 # ** Note: (vsim-220) 'C:/altera_lite/25.1std/questa_fse/win64/../modelsim.ini' is used as the ini file.
-# vsim -c work.tb_hybrid_pso_fuzzy_export -wlf C:/Users/Ferna/Documents/FPGA_MPPT_FUZZY_PSO/results/Apr_2023.wlf -l C:/Users/Ferna/Documents/FPGA_MPPT_FUZZY_PSO/results/Apr_2023_vsim.log -do "run -all; quit -f" -gDATASET_FILE=C:/Users/Ferna/Documents/FPGA_MPPT_FUZZY_PSO/dados_pre_processados/Apr_2023_dataset.txt -gRESULT_FILE=C:/Users/Ferna/Documents/FPGA_MPPT_FUZZY_PSO/results/Apr_2023_results.txt 
-# Start time: 00:03:31 on May 13,2026
-# ** Note: (vsim-3813) Design is being optimized due to module recompilation...
+# vsim -c work.tb_hybrid_pso_fuzzy_export -wlf C:/Users/Ferna/Documents/FPGA_MPPT_FUZZY_PSO/results/Apr_2023.wlf -l C:/Users/Ferna/Documents/FPGA_MPPT_FUZZY_PSO/results/Apr_2023_vsim.log -do "run -all; quit -f" -gC2_PSO_G_TB=60 -gRHO_MAX_G_TB=65 -gFOKKER_STEP_MIN_G_TB=1 -gFOKKER_STEP_MAX_G_TB=4 -gVEL_MIN_G_TB=-20 -gDEADZONE_G_TB=1 -gFUZZY_STEP_G_TB=40 -gFUZZY_EDGE_G_TB=100 -gVEL_MAX_G_TB=20 -gC1_PSO_G_TB=60 -gSEARCH_RADIUS_G_TB=10 -gDUTY_DIRECTION_G_TB=1 -gSETTLE_CYCLES_G=1 -gW_PSO_G_TB=70 -gSEARCH_CENTER_MODE_G_TB=2 -gPOWER_SCALE_DEN_G_TB=2048 -gDATASET_FILE=C:/Users/Ferna/Documents/FPGA_MPPT_FUZZY_PSO/dados_pre_processados/Apr_2023_dataset.txt -gRESULT_FILE=C:/Users/Ferna/Documents/FPGA_MPPT_FUZZY_PSO/results/Apr_2023_results.txt -gRHO_MIN_G_TB=55 
+# Start time: 11:33:05 on May 13,2026
+# ** Note: (vsim-3812) Design is being optimized...
 # ** Note: (vopt-220) 'C:/altera_lite/25.1std/questa_fse/win64/../modelsim.ini' is used as the ini file.
 # //  Questa Altera Starter FPGA Edition-64
 # //  Version 2025.2 win64 May 31 2025
@@ -30,5 +30,5 @@
 # Break in Process stim_proc at tb_hybrid_pso_fuzzy_export.vhd line 257
 # Stopped at tb_hybrid_pso_fuzzy_export.vhd line 257
 #  quit -f
-# End time: 00:07:53 on May 13,2026, Elapsed time: 0:04:22
+# End time: 11:37:03 on May 13,2026, Elapsed time: 0:03:58
 # Errors: 1, Warnings: 0

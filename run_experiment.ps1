@@ -9,7 +9,25 @@ param(
     [ValidateSet("W", "kW")]
     [string]$PowerUnit = "kW",
     [int]$MaxParallel = 4,
-    [switch]$CleanWork
+    [switch]$CleanWork,
+
+    [int]$SETTLE_CYCLES_G = 1,
+    [int]$W_PSO_G_TB = 70,
+    [int]$C1_PSO_G_TB = 60,
+    [int]$C2_PSO_G_TB = 60,
+    [int]$RHO_MIN_G_TB = 55,
+    [int]$RHO_MAX_G_TB = 65,
+    [int]$VEL_MIN_G_TB = -20,
+    [int]$VEL_MAX_G_TB = 20,
+    [int]$DEADZONE_G_TB = 1,
+    [int]$SEARCH_RADIUS_G_TB = 10,
+    [int]$FOKKER_STEP_MIN_G_TB = 1,
+    [int]$FOKKER_STEP_MAX_G_TB = 4,
+    [int]$FUZZY_STEP_G_TB = 40,
+    [int]$FUZZY_EDGE_G_TB = 100,
+    [int]$POWER_SCALE_DEN_G_TB = 2048,
+    [int]$DUTY_DIRECTION_G_TB = 1,
+    [int]$SEARCH_CENTER_MODE_G_TB = 2
 )
 
 $ErrorActionPreference = "Stop"
@@ -64,6 +82,16 @@ if ($CleanWork -and (Test-Path (Join-Path $ProjectRoot "work"))) {
 Push-Location $ProjectRoot
 
 try {
+    Write-Host ""
+    Write-Host "=== Hiperparametros usados ==="
+    Write-Host "W=$W_PSO_G_TB C1=$C1_PSO_G_TB C2=$C2_PSO_G_TB"
+    Write-Host "DEADZONE=$DEADZONE_G_TB FOKKER_STEP_MIN=$FOKKER_STEP_MIN_G_TB FOKKER_STEP_MAX=$FOKKER_STEP_MAX_G_TB"
+    Write-Host "FUZZY_STEP=$FUZZY_STEP_G_TB FUZZY_EDGE=$FUZZY_EDGE_G_TB"
+    Write-Host "RHO_MIN=$RHO_MIN_G_TB RHO_MAX=$RHO_MAX_G_TB"
+    Write-Host "VEL_MIN=$VEL_MIN_G_TB VEL_MAX=$VEL_MAX_G_TB"
+    Write-Host "SEARCH_CENTER_MODE=$SEARCH_CENTER_MODE_G_TB SEARCH_RADIUS=$SEARCH_RADIUS_G_TB"
+    Write-Host "DUTY_DIRECTION=$DUTY_DIRECTION_G_TB POWER_SCALE_DEN=$POWER_SCALE_DEN_G_TB"
+
     Write-Host ""
     Write-Host "=== Pre-processando dados em archive ==="
 
@@ -158,7 +186,24 @@ try {
                 $DatasetArgJob,
                 $ResultArgJob,
                 $LogArgJob,
-                $WlfArgJob
+                $WlfArgJob,
+                $SETTLE_CYCLES_G_Job,
+                $W_PSO_G_TB_Job,
+                $C1_PSO_G_TB_Job,
+                $C2_PSO_G_TB_Job,
+                $RHO_MIN_G_TB_Job,
+                $RHO_MAX_G_TB_Job,
+                $VEL_MIN_G_TB_Job,
+                $VEL_MAX_G_TB_Job,
+                $DEADZONE_G_TB_Job,
+                $SEARCH_RADIUS_G_TB_Job,
+                $FOKKER_STEP_MIN_G_TB_Job,
+                $FOKKER_STEP_MAX_G_TB_Job,
+                $FUZZY_STEP_G_TB_Job,
+                $FUZZY_EDGE_G_TB_Job,
+                $POWER_SCALE_DEN_G_TB_Job,
+                $DUTY_DIRECTION_G_TB_Job,
+                $SEARCH_CENTER_MODE_G_TB_Job
             )
 
             Set-Location $ProjectRootJob
@@ -170,6 +215,23 @@ try {
                     -l $LogArgJob `
                     "-gDATASET_FILE=$DatasetArgJob" `
                     "-gRESULT_FILE=$ResultArgJob" `
+                    "-gSETTLE_CYCLES_G=$SETTLE_CYCLES_G_Job" `
+                    "-gW_PSO_G_TB=$W_PSO_G_TB_Job" `
+                    "-gC1_PSO_G_TB=$C1_PSO_G_TB_Job" `
+                    "-gC2_PSO_G_TB=$C2_PSO_G_TB_Job" `
+                    "-gRHO_MIN_G_TB=$RHO_MIN_G_TB_Job" `
+                    "-gRHO_MAX_G_TB=$RHO_MAX_G_TB_Job" `
+                    "-gVEL_MIN_G_TB=$VEL_MIN_G_TB_Job" `
+                    "-gVEL_MAX_G_TB=$VEL_MAX_G_TB_Job" `
+                    "-gDEADZONE_G_TB=$DEADZONE_G_TB_Job" `
+                    "-gSEARCH_RADIUS_G_TB=$SEARCH_RADIUS_G_TB_Job" `
+                    "-gFOKKER_STEP_MIN_G_TB=$FOKKER_STEP_MIN_G_TB_Job" `
+                    "-gFOKKER_STEP_MAX_G_TB=$FOKKER_STEP_MAX_G_TB_Job" `
+                    "-gFUZZY_STEP_G_TB=$FUZZY_STEP_G_TB_Job" `
+                    "-gFUZZY_EDGE_G_TB=$FUZZY_EDGE_G_TB_Job" `
+                    "-gPOWER_SCALE_DEN_G_TB=$POWER_SCALE_DEN_G_TB_Job" `
+                    "-gDUTY_DIRECTION_G_TB=$DUTY_DIRECTION_G_TB_Job" `
+                    "-gSEARCH_CENTER_MODE_G_TB=$SEARCH_CENTER_MODE_G_TB_Job" `
                     -do "run -all; quit -f" *> $null
 
                 $ExitCode = $LASTEXITCODE
@@ -217,7 +279,30 @@ try {
                     Message = $_.Exception.Message
                 }
             }
-        } -ArgumentList $ProjectRoot, $MonthName, $DatasetArg, $ResultArg, $LogArg, $WlfArg
+        } -ArgumentList `
+            $ProjectRoot, `
+            $MonthName, `
+            $DatasetArg, `
+            $ResultArg, `
+            $LogArg, `
+            $WlfArg, `
+            $SETTLE_CYCLES_G, `
+            $W_PSO_G_TB, `
+            $C1_PSO_G_TB, `
+            $C2_PSO_G_TB, `
+            $RHO_MIN_G_TB, `
+            $RHO_MAX_G_TB, `
+            $VEL_MIN_G_TB, `
+            $VEL_MAX_G_TB, `
+            $DEADZONE_G_TB, `
+            $SEARCH_RADIUS_G_TB, `
+            $FOKKER_STEP_MIN_G_TB, `
+            $FOKKER_STEP_MAX_G_TB, `
+            $FUZZY_STEP_G_TB, `
+            $FUZZY_EDGE_G_TB, `
+            $POWER_SCALE_DEN_G_TB, `
+            $DUTY_DIRECTION_G_TB, `
+            $SEARCH_CENTER_MODE_G_TB
 
         $Jobs += $Job
     }
