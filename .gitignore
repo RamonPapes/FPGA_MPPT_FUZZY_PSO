@@ -12,6 +12,7 @@ optimization_runs/
 hc_output/
 .qsys_edit/
 .ipcache/
+results/*.log
 
 # -------------------------------------
 # Diretórios de Saída e Simulação
