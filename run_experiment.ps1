@@ -17,6 +17,18 @@ param(
     [string]$PlotDayResultFile = "Apr_2023_results.txt",
     [int]$PlotTargetDate = 20230415,
     [int]$MaxParallel = 4,
+    [string]$OptimizationDir = "optimization_runs",
+    [string]$OptimizationDataset = "",
+    [ValidateSet("stage1", "stage2", "both")]
+    [string]$OptimizationStage = "both",
+    [int]$OptimizationDays = 5,
+    [int]$OptimizationStage1Trials = 20,
+    [int]$OptimizationStage2TopK = 3,
+    [int]$OptimizationStage2TrialsPerBase = 8,
+    [int]$OptimizationMaxWorkers = 1,
+    [int]$OptimizationSeed = 42,
+    [switch]$SkipOptimization,
+    [switch]$SkipCalcError,
     [switch]$CleanWork,
 
     [int]$SETTLE_CYCLES_G = 1,
@@ -60,12 +72,57 @@ function Resolve-FromBase {
     return (Join-Path $BasePath $PathText)
 }
 
+function Set-IntegerParameterFromRow {
+    param(
+        [object]$Row,
+        [string]$Name
+    )
+
+    if ($Row.PSObject.Properties.Name -notcontains $Name) {
+        return
+    }
+
+    $ValueText = [string]$Row.$Name
+
+    if ([string]::IsNullOrWhiteSpace($ValueText)) {
+        return
+    }
+
+    $Culture = [System.Globalization.CultureInfo]::InvariantCulture
+    $Value = [int][Math]::Round([double]::Parse($ValueText, $Culture))
+    Set-Variable -Name $Name -Scope Script -Value $Value
+}
+
+$TunableGenericKeys = @(
+    "SETTLE_CYCLES_G",
+    "W_PSO_G_TB",
+    "C1_PSO_G_TB",
+    "C2_PSO_G_TB",
+    "RHO_MIN_G_TB",
+    "RHO_MAX_G_TB",
+    "VEL_MIN_G_TB",
+    "VEL_MAX_G_TB",
+    "DEADZONE_G_TB",
+    "SEARCH_RADIUS_G_TB",
+    "FOKKER_STEP_MIN_G_TB",
+    "FOKKER_STEP_MAX_G_TB",
+    "FUZZY_STEP_G_TB",
+    "FUZZY_EDGE_G_TB",
+    "POWER_SCALE_DEN_G_TB",
+    "ERROR_GAIN_G_TB",
+    "DELTA_V_MIN_G_TB",
+    "DUTY_DIRECTION_G_TB",
+    "SEARCH_CENTER_MODE_G_TB",
+    "RESET_ON_DATE_CHANGE_G_TB"
+)
+
 $ProjectRoot = (Resolve-Path $ProjectRoot).Path
 $ArchivePath = Resolve-FromBase $ProjectRoot $ArchiveDir
 $ScriptsPath = Resolve-FromBase $ProjectRoot $ScriptsDir
 $ResultsPath = Resolve-FromBase $ProjectRoot $ResultsDir
 $PreprocessedPath = Resolve-FromBase $ResultsPath $PreprocessedDir
 $PlotsPath = Resolve-FromBase $ResultsPath $PlotsDir
+$OptimizationPath = Resolve-FromBase $ResultsPath $OptimizationDir
 
 $PkgFile = Join-Path $ProjectRoot "hybrid_mppt_pkg.vhd"
 $TopFile = Join-Path $ProjectRoot "hybrid_pso_fuzzy_mppt.vhd"
@@ -74,6 +131,8 @@ $TbFile  = Join-Path $ProjectRoot "tb_hybrid_pso_fuzzy_export.vhd"
 $PreprocessScript = Join-Path $ScriptsPath "pre_process_data.py"
 $MetricsScript = Join-Path $ScriptsPath "gen_results.py"
 $PlotsScript = Join-Path $ScriptsPath "gen_plots.py"
+$OptimizerScript = Join-Path $ScriptsPath "optimize_hyperparameters.py"
+$CalcErrorScript = Join-Path $ScriptsPath "calc_error.py"
 
 if (-not (Test-Path $ArchivePath)) {
     throw "Pasta archive nao encontrada: $ArchivePath"
@@ -103,9 +162,18 @@ if (-not (Test-Path $PlotsScript)) {
     throw "Script Python de graficos nao encontrado: $PlotsScript"
 }
 
+if (-not (Test-Path $OptimizerScript)) {
+    throw "Script Python de otimizacao nao encontrado: $OptimizerScript"
+}
+
+if (-not (Test-Path $CalcErrorScript)) {
+    throw "Script Python de analise de erro nao encontrado: $CalcErrorScript"
+}
+
 New-Item -ItemType Directory -Force -Path $ResultsPath | Out-Null
 New-Item -ItemType Directory -Force -Path $PreprocessedPath | Out-Null
 New-Item -ItemType Directory -Force -Path $PlotsPath | Out-Null
+New-Item -ItemType Directory -Force -Path $OptimizationPath | Out-Null
 
 if ($CleanWork -and (Test-Path (Join-Path $ProjectRoot "work"))) {
     Remove-Item -Recurse -Force (Join-Path $ProjectRoot "work")
@@ -158,6 +226,88 @@ try {
 
     if ($DatasetFiles.Count -eq 0) {
         throw "Nenhum *_dataset.txt encontrado em: $PreprocessedPath"
+    }
+
+    if (-not $SkipOptimization) {
+        Write-Host ""
+        Write-Host "=== Otimizando hiperparametros ==="
+
+        if ([string]::IsNullOrWhiteSpace($OptimizationDataset)) {
+            $PreferredDataset = $DatasetFiles | Where-Object { $_.Name -eq "Apr_2023_dataset.txt" } | Select-Object -First 1
+
+            if ($null -eq $PreferredDataset) {
+                $PreferredDataset = $DatasetFiles | Select-Object -First 1
+            }
+
+            $OptimizationDatasetPath = $PreferredDataset.FullName
+        }
+        else {
+            $OptimizationDatasetPath = Resolve-FromBase $ProjectRoot $OptimizationDataset
+        }
+
+        if (-not (Test-Path $OptimizationDatasetPath)) {
+            throw "Dataset de otimizacao nao encontrado: $OptimizationDatasetPath"
+        }
+
+        Write-Host "Dataset de otimizacao: $OptimizationDatasetPath"
+        Write-Host "Saida da otimizacao: $OptimizationPath"
+        Write-Host "Stage=$OptimizationStage Dias=$OptimizationDays Stage1Trials=$OptimizationStage1Trials Stage2TopK=$OptimizationStage2TopK Stage2TrialsPorBase=$OptimizationStage2TrialsPerBase"
+
+        & $PythonExe $OptimizerScript `
+            --project-dir $ProjectRoot `
+            --dataset $OptimizationDatasetPath `
+            --out-dir $OptimizationPath `
+            --n-days $OptimizationDays `
+            --stage $OptimizationStage `
+            --stage1-trials $OptimizationStage1Trials `
+            --stage2-top-k $OptimizationStage2TopK `
+            --stage2-trials-per-base $OptimizationStage2TrialsPerBase `
+            --seed $OptimizationSeed `
+            --max-workers $OptimizationMaxWorkers
+
+        if ($LASTEXITCODE -ne 0) {
+            throw "Otimizacao terminou com codigo $LASTEXITCODE."
+        }
+
+        $BestFiles = @(
+            (Join-Path $OptimizationPath "optimization_final_best.csv"),
+            (Join-Path $OptimizationPath "stage2\stage2_best.csv"),
+            (Join-Path $OptimizationPath "stage1\stage1_best.csv")
+        )
+
+        $BestFile = $BestFiles | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+        if ([string]::IsNullOrWhiteSpace($BestFile)) {
+            throw "Nenhum arquivo de melhores hiperparametros foi encontrado em: $OptimizationPath"
+        }
+
+        $BestRow = Import-Csv $BestFile | Select-Object -First 1
+
+        if ($null -eq $BestRow) {
+            throw "Arquivo de melhores hiperparametros vazio: $BestFile"
+        }
+
+        foreach ($Key in $TunableGenericKeys) {
+            Set-IntegerParameterFromRow -Row $BestRow -Name $Key
+        }
+
+        Write-Host ""
+        Write-Host "=== Melhores hiperparametros aplicados ==="
+        Write-Host "Arquivo: $BestFile"
+        Write-Host "Score=$($BestRow.score)"
+        Write-Host "W=$W_PSO_G_TB C1=$C1_PSO_G_TB C2=$C2_PSO_G_TB"
+        Write-Host "DEADZONE=$DEADZONE_G_TB FOKKER_STEP_MIN=$FOKKER_STEP_MIN_G_TB FOKKER_STEP_MAX=$FOKKER_STEP_MAX_G_TB"
+        Write-Host "FUZZY_STEP=$FUZZY_STEP_G_TB FUZZY_EDGE=$FUZZY_EDGE_G_TB"
+        Write-Host "RHO_MIN=$RHO_MIN_G_TB RHO_MAX=$RHO_MAX_G_TB"
+        Write-Host "VEL_MIN=$VEL_MIN_G_TB VEL_MAX=$VEL_MAX_G_TB"
+        Write-Host "SEARCH_CENTER_MODE=$SEARCH_CENTER_MODE_G_TB SEARCH_RADIUS=$SEARCH_RADIUS_G_TB"
+        Write-Host "DUTY_DIRECTION=$DUTY_DIRECTION_G_TB POWER_SCALE_DEN=$POWER_SCALE_DEN_G_TB"
+        Write-Host "ERROR_GAIN=$ERROR_GAIN_G_TB DELTA_V_MIN=$DELTA_V_MIN_G_TB"
+        Write-Host "RESET_ON_DATE_CHANGE=$RESET_ON_DATE_CHANGE_G_TB"
+    }
+    else {
+        Write-Host ""
+        Write-Host "=== Otimizacao pulada: usando hiperparametros informados ==="
     }
 
     Write-Host ""
@@ -404,11 +554,29 @@ try {
         --day-result-file $PlotDayResultFile `
         --target-date $PlotTargetDate
 
+    if (-not $SkipCalcError) {
+        Write-Host ""
+        Write-Host "=== Calculando analise de escalonamento do erro ==="
+
+        & $PythonExe $CalcErrorScript `
+            --dataset $PreprocessedPath `
+            --output (Join-Path $ResultsPath "error_scaling_analysis.csv")
+
+        if ($LASTEXITCODE -ne 0) {
+            throw "Analise de erro terminou com codigo $LASTEXITCODE."
+        }
+    }
+    else {
+        Write-Host ""
+        Write-Host "=== Analise de erro pulada ==="
+    }
+
     Write-Host ""
     Write-Host "Processo finalizado."
     Write-Host "Dados pre-processados: $PreprocessedPath"
     Write-Host "Resultados: $ResultsPath"
     Write-Host "Graficos: $PlotsPath"
+    Write-Host "Otimizacao: $OptimizationPath"
 }
 finally {
     Pop-Location

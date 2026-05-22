@@ -26,6 +26,21 @@ def load_dataset(path: Path) -> pd.DataFrame:
     return df
 
 
+def load_dataset_input(path: Path) -> pd.DataFrame:
+    if path.is_file():
+        return load_dataset(path)
+
+    if not path.is_dir():
+        raise FileNotFoundError(f"Dataset nao encontrado: {path}")
+
+    dataset_files = sorted(path.glob("*_dataset.txt"))
+
+    if not dataset_files:
+        raise FileNotFoundError(f"Nenhum *_dataset.txt encontrado em: {path}")
+
+    return pd.concat((load_dataset(file_path) for file_path in dataset_files), ignore_index=True)
+
+
 def analyze(
     df: pd.DataFrame,
     power_scale_den: int,
@@ -101,7 +116,7 @@ def analyze(
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset", default="results/dados_pre_processados/Apr_2023_dataset.txt")
+    parser.add_argument("--dataset", default="results/dados_pre_processados")
     parser.add_argument("--power-scale-den", type=int, default=65536)
     parser.add_argument("--target-error", type=int, default=80)
     parser.add_argument("--percentile", type=float, default=95)
@@ -113,7 +128,7 @@ def main() -> None:
     output = Path(args.output).resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
 
-    df = load_dataset(dataset)
+    df = load_dataset_input(dataset)
 
     result = analyze(
         df=df,

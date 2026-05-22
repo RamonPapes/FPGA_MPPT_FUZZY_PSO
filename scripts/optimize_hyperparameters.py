@@ -10,6 +10,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from gen_results import calculate_day_metrics, read_result_file, summarize_month
+
 
 VHDL_FILES = [
     "hybrid_mppt_pkg.vhd",
@@ -54,6 +56,7 @@ STAGE1_FIXED_PARAMS = {
     "POWER_SCALE_DEN_G_TB": 65536,
     "ERROR_GAIN_G_TB": 1,
     "DELTA_V_MIN_G_TB": 16,
+    "RESET_ON_DATE_CHANGE_G_TB": 1,
 }
 
 # Rodada 2: refinamento.
@@ -173,106 +176,36 @@ def mean_or_zero(series: pd.Series) -> float:
 
 
 def calculate_metrics(result_file: Path) -> dict[str, float]:
-    df = pd.read_csv(result_file, sep=r"\s+", engine="python")
+    df = read_result_file(result_file)
+    daily_rows = [
+        calculate_day_metrics(result_file.stem, int(date_value), day_df)
+        for date_value, day_df in df.groupby("timestamp_date", sort=True)
+    ]
 
-    required = {
-        "sample",
-        "timestamp_date",
-        "timestamp_time",
-        "power_now",
-        "duty",
-        "error",
-    }
-
-    missing = required - set(df.columns)
-
-    if missing:
-        raise ValueError(f"{result_file.name} sem colunas obrigatorias: {sorted(missing)}")
-
-    optional_numeric = {"control_duty"} & set(df.columns)
-
-    for col in required | optional_numeric:
-        df[col] = pd.to_numeric(df[col], errors="coerce")
-
-    df = df.dropna(subset=["sample", "timestamp_date", "timestamp_time"])
-    df["timestamp_date"] = df["timestamp_date"].astype(int)
-    df["timestamp_seconds"] = df["timestamp_time"].apply(parse_hhmmss_to_seconds)
-
-    daily_rows = []
-
-    for _, day_df in df.groupby("timestamp_date", sort=True):
-        day_df = day_df.sort_values("sample").copy()
-
-        if day_df.empty:
-            continue
-
-        day_df["local_gbest_power"] = day_df["power_now"].cummax()
-
-        p_best_final = float(day_df["power_now"].max())
-
-        if p_best_final <= 0:
-            n_conv_98 = -1
-            t_conv_98 = -1.0
-            steady = day_df
-        else:
-            threshold = 0.98 * p_best_final
-            conv_df = day_df[day_df["local_gbest_power"] >= threshold]
-
-            if conv_df.empty:
-                n_conv_98 = -1
-                t_conv_98 = -1.0
-                steady = day_df
-            else:
-                first_conv = conv_df.iloc[0]
-                first_sample = int(day_df.iloc[0]["sample"])
-                first_time = int(day_df.iloc[0]["timestamp_seconds"])
-
-                n_conv_98 = int(first_conv["sample"]) - first_sample
-                t_conv_98 = float(int(first_conv["timestamp_seconds"]) - first_time)
-
-                if t_conv_98 < 0:
-                    t_conv_98 = 0.0
-
-                steady = day_df[day_df["sample"] >= first_conv["sample"]]
-
-        duty_col = "control_duty" if "control_duty" in day_df.columns else "duty"
-        duty = pd.to_numeric(day_df[duty_col], errors="coerce")
-        steady_duty = pd.to_numeric(steady[duty_col], errors="coerce")
-        duty_diff = duty.diff().abs().dropna()
-
-        daily_rows.append({
-            "P_best_final": p_best_final,
-            "N_conv_98": float(n_conv_98),
-            "T_conv_98_seconds": float(t_conv_98),
-            "duty_std_after_conv": std_or_zero(steady_duty),
-            "duty_step_mean": mean_or_zero(duty_diff),
-            "duty_range_after_conv": float(steady_duty.max() - steady_duty.min()) if len(steady_duty) else 0.0,
-            "P_ripple_after_conv": std_or_zero(steady["power_now"]),
-            "mean_abs_error": mean_or_zero(day_df["error"].abs()),
-            "std_abs_error": std_or_zero(day_df["error"].abs()),
-        })
-
-    if not daily_rows:
+    if len(daily_rows) == 0:
         raise ValueError(f"Nenhuma metrica diaria calculada para {result_file}")
 
     daily = pd.DataFrame(daily_rows)
-
+    metrics = summarize_month(result_file.stem, daily)
     metrics = {
-        f"{col}_mean": float(daily[col].mean())
-        for col in daily.columns
+        key: value
+        for key, value in metrics.items()
+        if key not in {"month", "n_days"}
     }
 
-    metrics.update({
-        f"{col}_std": float(daily[col].std(ddof=1)) if len(daily) > 1 else 0.0
-        for col in daily.columns
-    })
-
     # Com o testbench open-loop atual, power_now vem do dataset e nao do duty_out.
-    # Por isso o score prioriza estabilidade do duty, que depende diretamente do controlador.
+    # Por isso o score prioriza estabilidade final do duty e consistencia numerica.
     metrics["score"] = -(
-        1.00 * metrics["duty_std_after_conv_mean"]
-        + 0.50 * metrics["duty_step_mean_mean"]
-        + 0.10 * metrics["duty_range_after_conv_mean"]
+        1.00 * metrics.get("duty_final_std_mean", 0.0)
+        + 0.30 * metrics.get("duty_final_range_mean", 0.0)
+        + 0.20 * metrics.get("duty_std_mean", 0.0)
+        + 0.05 * metrics.get("duty_range_mean", 0.0)
+        + 0.50 * metrics.get("duty_saturation_after_stable_percent_mean", 0.0)
+        + 0.10 * metrics.get("mean_abs_error_mean", 0.0)
+        + 0.10 * metrics.get("mean_abs_delta_e_mean", 0.0)
+        + 20.0 * (1.0 - metrics.get("duty_converged_mean", 0.0))
+        + 5.0 * metrics.get("gbest_consistency_violations_mean", 0.0)
+        + 5.0 * metrics.get("gbest_monotonic_violations_mean", 0.0)
     )
 
     return metrics
@@ -461,9 +394,13 @@ def save_ranked_results(df: pd.DataFrame, out_dir: Path, prefix: str, top_n: int
         "VEL_MAX_G_TB",
         "RHO_MIN_G_TB",
         "RHO_MAX_G_TB",
-        "duty_std_after_conv_mean",
-        "duty_step_mean_mean",
-        "duty_range_after_conv_mean",
+        "duty_final_std_mean",
+        "duty_final_range_mean",
+        "duty_std_mean",
+        "duty_range_mean",
+        "duty_saturation_after_stable_percent_mean",
+        "mean_abs_error_mean",
+        "mean_abs_delta_e_mean",
     ]
     cols = [c for c in cols if c in ok.columns]
     print(ok[cols].head(10).to_string(index=False))
