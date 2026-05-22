@@ -29,8 +29,8 @@ entity hybrid_pso_fuzzy_mppt is
         reset            : in  std_logic;
         enable           : in  std_logic;
 
-        current_in       : in  signed(15 downto 0);  -- Q1.15
-        voltage_in       : in  signed(15 downto 0);  -- Q12.4
+        current_in       : in  signed(15 downto 0);  -- escala do pre-processamento
+        voltage_in       : in  signed(15 downto 0);  -- Q12.4 por padrao
 
         duty_out         : out std_logic_vector(7 downto 0);
         store_valid      : out std_logic;

@@ -140,7 +140,7 @@ begin
         wait until rising_edge(clk);
 
         write(out_line, string'("sample timestamp_date timestamp_time voltage current power_now duty gbest_duty gbest_power error delta_e fuzzy_delta "));
-        write(out_line, string'("W_PSO C1_PSO C2_PSO RHO_MIN RHO_MAX VEL_MIN VEL_MAX DEADZONE SEARCH_RADIUS FOKKER_STEP_MIN FOKKER_STEP_MAX FUZZY_STEP FUZZY_EDGE"));
+        write(out_line, string'("W_PSO C1_PSO C2_PSO RHO_MIN RHO_MAX VEL_MIN VEL_MAX DEADZONE SEARCH_RADIUS FOKKER_STEP_MIN FOKKER_STEP_MAX FUZZY_STEP FUZZY_EDGE POWER_SCALE_DEN"));
         writeline(result_file, out_line);
 
         while not endfile(data_file) loop
@@ -151,7 +151,11 @@ begin
             read(line_buf, volt_val);
             read(line_buf, curr_val);
 
-            power_now := (volt_val * curr_val) / 65536;
+            if POWER_SCALE_DEN_G_TB <= 0 then
+                power_now := (volt_val * curr_val) / 1;
+            else
+                power_now := (volt_val * curr_val) / POWER_SCALE_DEN_G_TB;
+            end if;
 
             wait until rising_edge(clk);
 
@@ -239,6 +243,9 @@ begin
             write(out_line, string'(" "));
 
             write(out_line, FUZZY_EDGE_G_TB);
+            write(out_line, string'(" "));
+
+            write(out_line, POWER_SCALE_DEN_G_TB);
 
             writeline(result_file, out_line);
 

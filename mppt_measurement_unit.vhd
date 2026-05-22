@@ -32,6 +32,7 @@ begin
         variable power_now_v    : integer;
         variable delta_p_v      : integer;
         variable delta_v_v      : integer;
+        variable delta_v_eff    : integer;
         variable error_raw_v    : integer;
         variable error_next_v   : integer;
         variable delta_e_next_v : integer;
@@ -47,11 +48,16 @@ begin
         delta_p_v := power_now_v - prev_power;
         delta_v_v := voltage_now_v - prev_voltage;
 
-        if abs_int(delta_v_v) < 4 then
-            error_raw_v := 0;
+        -- Atribui um valor minimo a delta_v mitigando explosoes de dP/dV
+        if delta_v_v >= 0 and delta_v_v < 16 then
+            delta_v_eff := 16;
+        elsif delta_v_v < 0 and delta_v_v > -16 then
+            delta_v_eff := -16;
         else
-            error_raw_v := (delta_p_v * 100) / delta_v_v;
+            delta_v_eff := delta_v_v;
         end if;
+
+        error_raw_v := (delta_p_v * 100) / delta_v_eff;
 
         error_next_v := clamp(error_raw_v, -100, 100);
         delta_e_next_v := clamp(error_next_v - prev_error, -100, 100);
