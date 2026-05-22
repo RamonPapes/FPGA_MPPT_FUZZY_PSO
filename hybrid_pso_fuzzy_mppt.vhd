@@ -20,7 +20,9 @@ entity hybrid_pso_fuzzy_mppt is
         FOKKER_STEP_MAX_G : integer := 8;
         FUZZY_STEP_G      : integer := 30;
         FUZZY_EDGE_G      : integer := 90;
-        POWER_SCALE_DEN_G : integer := 2048;
+        POWER_SCALE_DEN_G : integer := 65536;
+        ERROR_GAIN_G      : integer := 1;
+        DELTA_V_MIN_G     : integer := 16;
         DUTY_DIRECTION_G  : integer := -1;
         SEARCH_CENTER_MODE_G : integer := 1
     );
@@ -29,7 +31,7 @@ entity hybrid_pso_fuzzy_mppt is
         reset            : in  std_logic;
         enable           : in  std_logic;
 
-        current_in       : in  signed(15 downto 0);  -- escala do pre-processamento
+        current_in       : in  signed(15 downto 0);  -- Q1.15 normalizado
         voltage_in       : in  signed(15 downto 0);  -- Q12.4 por padrao
 
         duty_out         : out std_logic_vector(7 downto 0);
@@ -133,7 +135,9 @@ begin
 
     u_measurement: entity work.mppt_measurement_unit
         generic map (
-            POWER_SCALE_DEN_G => POWER_SCALE_DEN_G
+            POWER_SCALE_DEN_G => POWER_SCALE_DEN_G,
+            ERROR_GAIN_G      => ERROR_GAIN_G,
+            DELTA_V_MIN_G     => DELTA_V_MIN_G
         )
         port map (
             current_in     => current_in,

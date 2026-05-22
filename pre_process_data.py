@@ -87,6 +87,9 @@ def convert_csv(
     power_unit: str,
     voltage_scale: float,
     current_scale: float,
+    current_format: str,
+    current_base_amps: float,
+    current_q15_scale: float,
     min_voltage: float,
     min_power_watts: float,
     keep_power_sign: bool,
@@ -106,6 +109,7 @@ def convert_csv(
     voltage_int_values = []
     current_int_values = []
     output_lines = []
+    valid_records = []
 
     with csv_path.open("r", encoding="utf-8-sig", errors="ignore", newline="") as f:
         reader = csv.DictReader(f, dialect=dialect)
@@ -157,29 +161,49 @@ def convert_csv(
                 skipped_low_power_rows += 1
                 continue
 
-            current = power_watts / voltage
-
-            voltage_int, voltage_clipped = clamp_int16(int(round(voltage * voltage_scale)))
-            current_int, current_clipped = clamp_int16(int(round(current * current_scale)))
-
-            clipped_voltage_rows += int(voltage_clipped)
-            clipped_current_rows += int(current_clipped)
-
             timestamp_date, timestamp_time = timestamp
-            output_lines.append(f"{timestamp_date} {timestamp_time} {voltage_int} {current_int}")
+            current = power_watts / voltage
+            valid_records.append((timestamp_date, timestamp_time, power_watts, voltage, current))
 
-            valid_rows += 1
-            power_values.append(power_watts)
-            voltage_values.append(voltage)
-            current_values.append(current)
-            voltage_int_values.append(voltage_int)
-            current_int_values.append(current_int)
-
-    if valid_rows == 0:
+    if not valid_records:
         raise ValueError(
             f"Nenhuma linha valida em {csv_path.name}. "
             "Verifique power_col, voltage_col, power_unit e min_power_watts."
         )
+
+    valid_rows = len(valid_records)
+
+    if current_format == "q1.15-normalized":
+        if current_base_amps > 0:
+            effective_current_base = current_base_amps
+        else:
+            effective_current_base = max(abs(record[4]) for record in valid_records)
+
+        if effective_current_base <= 0:
+            raise ValueError(f"Base de corrente invalida para {csv_path.name}: {effective_current_base}")
+    else:
+        effective_current_base = 1.0
+
+    for timestamp_date, timestamp_time, power_watts, voltage, current in valid_records:
+        voltage_int, voltage_clipped = clamp_int16(int(round(voltage * voltage_scale)))
+
+        if current_format == "q1.15-normalized":
+            current_encoded = (current / effective_current_base) * current_q15_scale
+        else:
+            current_encoded = current * current_scale
+
+        current_int, current_clipped = clamp_int16(int(round(current_encoded)))
+
+        clipped_voltage_rows += int(voltage_clipped)
+        clipped_current_rows += int(current_clipped)
+
+        output_lines.append(f"{timestamp_date} {timestamp_time} {voltage_int} {current_int}")
+
+        power_values.append(power_watts)
+        voltage_values.append(voltage)
+        current_values.append(current)
+        voltage_int_values.append(voltage_int)
+        current_int_values.append(current_int)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text("\n".join(output_lines) + "\n", encoding="ascii")
@@ -202,6 +226,11 @@ def convert_csv(
         "skipped_low_power_rows": skipped_low_power_rows,
         "clipped_voltage_rows": clipped_voltage_rows,
         "clipped_current_rows": clipped_current_rows,
+        "current_format": current_format,
+        "current_base_amps": effective_current_base,
+        "voltage_scale": voltage_scale,
+        "current_scale": current_scale,
+        "current_q15_scale": current_q15_scale,
         "power_watts_min": min0(power_values),
         "power_watts_mean": mean0(power_values),
         "power_watts_max": max0(power_values),
@@ -230,6 +259,13 @@ def main() -> None:
     parser.add_argument("--power-unit", choices=["W", "kW", "w", "kw"], default="kW")
     parser.add_argument("--voltage-scale", type=float, default=16.0)
     parser.add_argument("--current-scale", type=float, default=128.0)
+    parser.add_argument(
+        "--current-format",
+        choices=["q1.15-normalized", "linear"],
+        default="q1.15-normalized",
+    )
+    parser.add_argument("--current-base-amps", type=float, default=0.0)
+    parser.add_argument("--current-q15-scale", type=float, default=32767.0)
     parser.add_argument("--min-voltage", type=float, default=1e-6)
     parser.add_argument("--min-power-watts", type=float, default=10.0)
     parser.add_argument("--keep-power-sign", action="store_true")
@@ -262,6 +298,9 @@ def main() -> None:
             power_unit=args.power_unit,
             voltage_scale=args.voltage_scale,
             current_scale=args.current_scale,
+            current_format=args.current_format,
+            current_base_amps=args.current_base_amps,
+            current_q15_scale=args.current_q15_scale,
             min_voltage=args.min_voltage,
             min_power_watts=args.min_power_watts,
             keep_power_sign=args.keep_power_sign,

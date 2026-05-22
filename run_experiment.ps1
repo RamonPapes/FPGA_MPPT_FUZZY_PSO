@@ -8,6 +8,10 @@ param(
     [string]$VoltageColumn = "MG-LV-MSB_AC_Voltage",
     [ValidateSet("W", "kW")]
     [string]$PowerUnit = "kW",
+    [ValidateSet("q1.15-normalized", "linear")]
+    [string]$CurrentFormat = "q1.15-normalized",
+    [double]$CurrentBaseAmps = 0.0,
+    [double]$CurrentQ15Scale = 32767.0,
     [int]$MaxParallel = 4,
     [switch]$CleanWork,
 
@@ -25,7 +29,9 @@ param(
     [int]$FOKKER_STEP_MAX_G_TB = 4,
     [int]$FUZZY_STEP_G_TB = 40,
     [int]$FUZZY_EDGE_G_TB = 100,
-    [int]$POWER_SCALE_DEN_G_TB = 2048,
+    [int]$POWER_SCALE_DEN_G_TB = 65536,
+    [int]$ERROR_GAIN_G_TB = 1,
+    [int]$DELTA_V_MIN_G_TB = 16,
     [int]$DUTY_DIRECTION_G_TB = 1,
     [int]$SEARCH_CENTER_MODE_G_TB = 2
 )
@@ -91,6 +97,8 @@ try {
     Write-Host "VEL_MIN=$VEL_MIN_G_TB VEL_MAX=$VEL_MAX_G_TB"
     Write-Host "SEARCH_CENTER_MODE=$SEARCH_CENTER_MODE_G_TB SEARCH_RADIUS=$SEARCH_RADIUS_G_TB"
     Write-Host "DUTY_DIRECTION=$DUTY_DIRECTION_G_TB POWER_SCALE_DEN=$POWER_SCALE_DEN_G_TB"
+    Write-Host "ERROR_GAIN=$ERROR_GAIN_G_TB DELTA_V_MIN=$DELTA_V_MIN_G_TB"
+    Write-Host "CURRENT_FORMAT=$CurrentFormat CURRENT_BASE_AMPS=$CurrentBaseAmps CURRENT_Q15_SCALE=$CurrentQ15Scale"
 
     Write-Host ""
     Write-Host "=== Pre-processando dados em archive ==="
@@ -100,7 +108,10 @@ try {
         --output-dir $PreprocessedPath `
         --power-col $PowerColumn `
         --voltage-col $VoltageColumn `
-        --power-unit $PowerUnit
+        --power-unit $PowerUnit `
+        --current-format $CurrentFormat `
+        --current-base-amps $CurrentBaseAmps `
+        --current-q15-scale $CurrentQ15Scale
 
     Write-Host ""
     Write-Host "=== Compilando projeto VHDL ==="
@@ -202,6 +213,8 @@ try {
                 $FUZZY_STEP_G_TB_Job,
                 $FUZZY_EDGE_G_TB_Job,
                 $POWER_SCALE_DEN_G_TB_Job,
+                $ERROR_GAIN_G_TB_Job,
+                $DELTA_V_MIN_G_TB_Job,
                 $DUTY_DIRECTION_G_TB_Job,
                 $SEARCH_CENTER_MODE_G_TB_Job
             )
@@ -230,6 +243,8 @@ try {
                     "-gFUZZY_STEP_G_TB=$FUZZY_STEP_G_TB_Job" `
                     "-gFUZZY_EDGE_G_TB=$FUZZY_EDGE_G_TB_Job" `
                     "-gPOWER_SCALE_DEN_G_TB=$POWER_SCALE_DEN_G_TB_Job" `
+                    "-gERROR_GAIN_G_TB=$ERROR_GAIN_G_TB_Job" `
+                    "-gDELTA_V_MIN_G_TB=$DELTA_V_MIN_G_TB_Job" `
                     "-gDUTY_DIRECTION_G_TB=$DUTY_DIRECTION_G_TB_Job" `
                     "-gSEARCH_CENTER_MODE_G_TB=$SEARCH_CENTER_MODE_G_TB_Job" `
                     -do "run -all; quit -f" *> $null
@@ -301,6 +316,8 @@ try {
             $FUZZY_STEP_G_TB, `
             $FUZZY_EDGE_G_TB, `
             $POWER_SCALE_DEN_G_TB, `
+            $ERROR_GAIN_G_TB, `
+            $DELTA_V_MIN_G_TB, `
             $DUTY_DIRECTION_G_TB, `
             $SEARCH_CENTER_MODE_G_TB
 

@@ -51,7 +51,9 @@ STAGE1_FIXED_PARAMS = {
     "VEL_MAX_G_TB": 20,
     "FOKKER_STEP_MIN_G_TB": 1,
     "FUZZY_EDGE_G_TB": 90,
-    "POWER_SCALE_DEN_G_TB": 2048,
+    "POWER_SCALE_DEN_G_TB": 65536,
+    "ERROR_GAIN_G_TB": 1,
+    "DELTA_V_MIN_G_TB": 16,
 }
 
 # Rodada 2: refinamento.

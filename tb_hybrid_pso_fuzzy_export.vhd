@@ -24,7 +24,9 @@ entity tb_hybrid_pso_fuzzy_export is
         FOKKER_STEP_MAX_G_TB : integer := 8;
         FUZZY_STEP_G_TB      : integer := 30;
         FUZZY_EDGE_G_TB      : integer := 90;
-        POWER_SCALE_DEN_G_TB : integer := 2048;
+        POWER_SCALE_DEN_G_TB : integer := 65536;
+        ERROR_GAIN_G_TB      : integer := 1;
+        DELTA_V_MIN_G_TB     : integer := 16;
         DUTY_DIRECTION_G_TB  : integer := -1;
         SEARCH_CENTER_MODE_G_TB : integer := 1
     );
@@ -81,6 +83,8 @@ begin
             FUZZY_STEP_G      => FUZZY_STEP_G_TB,
             FUZZY_EDGE_G      => FUZZY_EDGE_G_TB,
             POWER_SCALE_DEN_G => POWER_SCALE_DEN_G_TB,
+            ERROR_GAIN_G      => ERROR_GAIN_G_TB,
+            DELTA_V_MIN_G     => DELTA_V_MIN_G_TB,
             DUTY_DIRECTION_G  => DUTY_DIRECTION_G_TB,
             SEARCH_CENTER_MODE_G => SEARCH_CENTER_MODE_G_TB
         )
@@ -140,7 +144,7 @@ begin
         wait until rising_edge(clk);
 
         write(out_line, string'("sample timestamp_date timestamp_time voltage current power_now duty gbest_duty gbest_power error delta_e fuzzy_delta "));
-        write(out_line, string'("W_PSO C1_PSO C2_PSO RHO_MIN RHO_MAX VEL_MIN VEL_MAX DEADZONE SEARCH_RADIUS FOKKER_STEP_MIN FOKKER_STEP_MAX FUZZY_STEP FUZZY_EDGE POWER_SCALE_DEN"));
+        write(out_line, string'("W_PSO C1_PSO C2_PSO RHO_MIN RHO_MAX VEL_MIN VEL_MAX DEADZONE SEARCH_RADIUS FOKKER_STEP_MIN FOKKER_STEP_MAX FUZZY_STEP FUZZY_EDGE POWER_SCALE_DEN ERROR_GAIN DELTA_V_MIN"));
         writeline(result_file, out_line);
 
         while not endfile(data_file) loop
@@ -246,6 +250,12 @@ begin
             write(out_line, string'(" "));
 
             write(out_line, POWER_SCALE_DEN_G_TB);
+            write(out_line, string'(" "));
+
+            write(out_line, ERROR_GAIN_G_TB);
+            write(out_line, string'(" "));
+
+            write(out_line, DELTA_V_MIN_G_TB);
 
             writeline(result_file, out_line);
 

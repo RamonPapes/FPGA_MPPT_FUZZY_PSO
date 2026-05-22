@@ -139,7 +139,7 @@ def plot_day_inputs_and_fuzzy(
 
     axes[1].plot(x, current)
     axes[1].set_title("Input - Ipv")
-    axes[1].set_ylabel("Current (A)")
+    axes[1].set_ylabel("Current (p.u.)")
 
     axes[2].plot(x, day_df["error"])
     axes[2].set_title("Error (dP/dV)")
@@ -185,7 +185,7 @@ def plot_day_inputs_and_fuzzy(
         ax.legend()
     ax.set_title(f"Power - {target_date}")
     ax.set_xlabel("Samples")
-    ax.set_ylabel("Power (W)")
+    ax.set_ylabel("Scaled power")
     ax.grid(True)
 
     fig.tight_layout()
@@ -235,7 +235,7 @@ def plot_monthly_comparisons(general_df: pd.DataFrame, output_dir: Path) -> None
             "P_best_final_mean",
             "P_best_final_std",
             "Potencia maxima diaria do historico",
-            "Power (W)",
+            "Scaled power",
             "monthly_p_best_final.png",
         ),
         (
@@ -386,7 +386,7 @@ def plot_score_like_monthly_summary(general_df: pd.DataFrame, output_dir: Path) 
 
 def plot_daily_metric_lines(daily_df: pd.DataFrame, output_dir: Path) -> None:
     metrics = [
-        ("P_best_final", "Potencia maxima diaria do historico", "Power (W)", "daily_p_best_final_by_month.png"),
+        ("P_best_final", "Potencia maxima diaria escalada", "Scaled power", "daily_p_best_final_by_month.png"),
         ("T_conv_duty_stable_seconds", "Tempo diario ate estabilidade do duty", "Seconds", "daily_t_conv_duty_stable_by_month.png"),
         ("N_conv_duty_stable", "Amostras ate estabilidade do duty", "Samples", "daily_n_conv_duty_stable_by_month.png"),
         ("duty_std_after_stable", "Oscilacao diaria do duty apos estabilidade", "Duty standard deviation", "daily_duty_std_after_stable_by_month.png"),
@@ -469,7 +469,7 @@ def main() -> None:
     parser.add_argument("--day-result-file", default="Apr_2023_results.txt")
     parser.add_argument("--target-date", type=int, default=20230415)
     parser.add_argument("--voltage-scale", type=float, default=16.0)
-    parser.add_argument("--current-scale", type=float, default=128.0)
+    parser.add_argument("--current-scale", type=float, default=32767.0)
     args = parser.parse_args()
 
     results_dir = Path(args.results_dir).resolve()

@@ -46,7 +46,8 @@ def analyze(
     rows = []
 
     for deadzone in deadzones:
-        valid = df[df["delta_v"].abs() >= deadzone].copy()
+        valid_mask = df["delta_v"].abs() >= deadzone
+        valid = df[valid_mask].copy()
 
         if valid.empty:
             rows.append({
@@ -77,8 +78,9 @@ def analyze(
         else:
             gain = max(1, int(target_error // ref))
 
-        valid["error_est"] = valid["slope"] * gain
-        saturation_percent = float((valid["error_est"].abs() >= 100).mean() * 100.0)
+        df["error_est"] = 0
+        df.loc[valid.index, "error_est"] = valid["slope"] * gain
+        saturation_percent = float((df["error_est"].abs() >= 100).mean() * 100.0)
 
         ignored_percent = float((1.0 - (len(valid) / len(df))) * 100.0)
 
@@ -100,7 +102,7 @@ def analyze(
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", default="dados_pre_processados/Apr_2023_dataset.txt")
-    parser.add_argument("--power-scale-den", type=int, default=2048)
+    parser.add_argument("--power-scale-den", type=int, default=65536)
     parser.add_argument("--target-error", type=int, default=80)
     parser.add_argument("--percentile", type=float, default=95)
     parser.add_argument("--output", default="error_scaling_analysis.csv")
