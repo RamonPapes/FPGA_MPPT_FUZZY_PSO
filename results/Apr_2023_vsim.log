@@ -1,6 +1,6 @@
 # ** Note: (vsim-220) 'C:/altera_lite/25.1std/questa_fse/win64/../modelsim.ini' is used as the ini file.
-# vsim -c work.tb_hybrid_pso_fuzzy_export -wlf C:/Users/Ferna/Documents/FPGA_MPPT_FUZZY_PSO/results/Apr_2023.wlf -l C:/Users/Ferna/Documents/FPGA_MPPT_FUZZY_PSO/results/Apr_2023_vsim.log -do "run -all; quit -f" -gC2_PSO_G_TB=60 -gRHO_MAX_G_TB=65 -gERROR_GAIN_G_TB=1 -gFOKKER_STEP_MIN_G_TB=1 -gDELTA_V_MIN_G_TB=16 -gFOKKER_STEP_MAX_G_TB=4 -gVEL_MIN_G_TB=-20 -gDEADZONE_G_TB=1 -gFUZZY_STEP_G_TB=40 -gFUZZY_EDGE_G_TB=100 -gVEL_MAX_G_TB=20 -gC1_PSO_G_TB=60 -gSEARCH_RADIUS_G_TB=10 -gDUTY_DIRECTION_G_TB=1 -gSETTLE_CYCLES_G=1 -gW_PSO_G_TB=70 -gSEARCH_CENTER_MODE_G_TB=2 -gPOWER_SCALE_DEN_G_TB=65536 -gDATASET_FILE=C:/Users/Ferna/Documents/FPGA_MPPT_FUZZY_PSO/results/dados_pre_processados/Apr_2023_dataset.txt -gRESULT_FILE=C:/Users/Ferna/Documents/FPGA_MPPT_FUZZY_PSO/results/Apr_2023_results.txt -gRHO_MIN_G_TB=55 
-# Start time: 19:09:04 on May 22,2026
+# vsim -c work.tb_hybrid_pso_fuzzy_export -wlf C:/Users/Ferna/Documents/FPGA_MPPT_FUZZY_PSO/results/Apr_2023.wlf -l C:/Users/Ferna/Documents/FPGA_MPPT_FUZZY_PSO/results/Apr_2023_vsim.log -do "run -all; quit -f" -gC2_PSO_G_TB=60 -gRHO_MAX_G_TB=65 -gERROR_GAIN_G_TB=1 -gFOKKER_STEP_MIN_G_TB=1 -gDELTA_V_MIN_G_TB=16 -gFOKKER_STEP_MAX_G_TB=4 -gVEL_MIN_G_TB=-20 -gDEADZONE_G_TB=1 -gFUZZY_STEP_G_TB=40 -gFUZZY_EDGE_G_TB=100 -gVEL_MAX_G_TB=20 -gC1_PSO_G_TB=60 -gSEARCH_RADIUS_G_TB=10 -gDUTY_DIRECTION_G_TB=1 -gSETTLE_CYCLES_G=1 -gW_PSO_G_TB=70 -gRESET_ON_DATE_CHANGE_G_TB=1 -gSEARCH_CENTER_MODE_G_TB=2 -gPOWER_SCALE_DEN_G_TB=65536 -gDATASET_FILE=C:/Users/Ferna/Documents/FPGA_MPPT_FUZZY_PSO/results/dados_pre_processados/Apr_2023_dataset.txt -gRESULT_FILE=C:/Users/Ferna/Documents/FPGA_MPPT_FUZZY_PSO/results/Apr_2023_results.txt -gRHO_MIN_G_TB=55 
+# Start time: 19:30:56 on May 22,2026
 # ** Note: (vsim-3812) Design is being optimized...
 # ** Note: (vopt-220) 'C:/altera_lite/25.1std/questa_fse/win64/../modelsim.ini' is used as the ini file.
 # //  Questa Altera Starter FPGA Edition-64
@@ -26,9 +26,9 @@
 # Loading work.hybrid_pso_fuzzy_mppt(structural)#1
 # run -all
 # ** Failure: Simulation finished successfully.
-#    Time: 11190270 ns  Iteration: 0  Process: /tb_hybrid_pso_fuzzy_export/stim_proc File: tb_hybrid_pso_fuzzy_export.vhd
-# Break in Process stim_proc at tb_hybrid_pso_fuzzy_export.vhd line 274
-# Stopped at tb_hybrid_pso_fuzzy_export.vhd line 274
+#    Time: 11191370 ns  Iteration: 0  Process: /tb_hybrid_pso_fuzzy_export/stim_proc File: tb_hybrid_pso_fuzzy_export.vhd
+# Break in Process stim_proc at tb_hybrid_pso_fuzzy_export.vhd line 294
+# Stopped at tb_hybrid_pso_fuzzy_export.vhd line 294
 #  quit -f
-# End time: 19:13:02 on May 22,2026, Elapsed time: 0:03:58
+# End time: 19:34:56 on May 22,2026, Elapsed time: 0:04:00
 # Errors: 1, Warnings: 0

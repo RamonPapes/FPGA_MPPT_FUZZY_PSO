@@ -49,6 +49,7 @@ def read_result_file(path: Path) -> pd.DataFrame:
     optional_numeric = {
         "gbest_duty",
         "gbest_power",
+        "control_duty",
         "fuzzy_delta",
         "POWER_SCALE_DEN",
     }
@@ -174,17 +175,22 @@ def plot_day_inputs_and_fuzzy(
     fig.savefig(output_path, dpi=300)
     plt.close(fig)
 
+    duty_col = "control_duty" if "control_duty" in day_df.columns else "duty"
+    duty_title_day = str(target_date)[-2:]
+
     fig, ax = plt.subplots(figsize=(9, 5))
-    ax.plot(x, day_df["duty"])
-    if "gbest_duty" in day_df.columns:
-        ax.plot(x, day_df["gbest_duty"], linewidth=1, alpha=0.75, label="gbest duty")
-        ax.legend()
-    if stable_sample is not None and stable_sample >= 0:
-        ax.axvline(stable_sample, color="tab:green", linestyle="--", linewidth=1)
-    ax.set_title(f"Duty Cycle - {target_date}")
+    ax.plot(
+        x,
+        day_df[duty_col],
+        color="black",
+        linewidth=1.0,
+        drawstyle="steps-post",
+    )
+    ax.set_title(f"DUTY CYCLE (Day {int(duty_title_day)})")
     ax.set_xlabel("Samples")
     ax.set_ylabel("Duty Cycle (%)")
-    ax.grid(True)
+    ax.grid(True, color="0.75", linewidth=0.5, alpha=0.6)
+    ax.tick_params(direction="in", top=True, right=True)
 
     fig.tight_layout()
 

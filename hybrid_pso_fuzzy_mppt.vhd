@@ -35,6 +35,7 @@ entity hybrid_pso_fuzzy_mppt is
         voltage_in       : in  signed(15 downto 0);  -- Q12.4 por padrao
 
         duty_out         : out std_logic_vector(7 downto 0);
+        control_duty_out : out integer;
         store_valid      : out std_logic;
 
         gbest_duty_out   : out integer;
@@ -164,7 +165,7 @@ begin
             DUTY_DIRECTION_G  => DUTY_DIRECTION_G
         )
         port map (
-            duty_in       => duty_reg,
+            duty_in       => pno_candidate,
             delta_p       => delta_p_sig,
             delta_v       => delta_v_sig,
             error_in      => error_next_sig,
@@ -332,6 +333,7 @@ begin
         end if;
     end process;
 
+    control_duty_out <= pno_candidate;
     gbest_duty_out  <= gbest_pos;
     gbest_power_out <= gbest_power;
     error_out       <= error_reg;

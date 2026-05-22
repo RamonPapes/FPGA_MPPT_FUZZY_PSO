@@ -37,7 +37,8 @@ param(
     [int]$ERROR_GAIN_G_TB = 1,
     [int]$DELTA_V_MIN_G_TB = 16,
     [int]$DUTY_DIRECTION_G_TB = 1,
-    [int]$SEARCH_CENTER_MODE_G_TB = 2
+    [int]$SEARCH_CENTER_MODE_G_TB = 2,
+    [int]$RESET_ON_DATE_CHANGE_G_TB = 1
 )
 
 $ErrorActionPreference = "Stop"
@@ -123,6 +124,7 @@ try {
     Write-Host "SEARCH_CENTER_MODE=$SEARCH_CENTER_MODE_G_TB SEARCH_RADIUS=$SEARCH_RADIUS_G_TB"
     Write-Host "DUTY_DIRECTION=$DUTY_DIRECTION_G_TB POWER_SCALE_DEN=$POWER_SCALE_DEN_G_TB"
     Write-Host "ERROR_GAIN=$ERROR_GAIN_G_TB DELTA_V_MIN=$DELTA_V_MIN_G_TB"
+    Write-Host "RESET_ON_DATE_CHANGE=$RESET_ON_DATE_CHANGE_G_TB"
     Write-Host "CURRENT_FORMAT=$CurrentFormat CURRENT_BASE_AMPS=$CurrentBaseAmps CURRENT_Q15_SCALE=$CurrentQ15Scale"
 
     Write-Host ""
@@ -241,7 +243,8 @@ try {
                 $ERROR_GAIN_G_TB_Job,
                 $DELTA_V_MIN_G_TB_Job,
                 $DUTY_DIRECTION_G_TB_Job,
-                $SEARCH_CENTER_MODE_G_TB_Job
+                $SEARCH_CENTER_MODE_G_TB_Job,
+                $RESET_ON_DATE_CHANGE_G_TB_Job
             )
 
             Set-Location $ProjectRootJob
@@ -272,6 +275,7 @@ try {
                     "-gDELTA_V_MIN_G_TB=$DELTA_V_MIN_G_TB_Job" `
                     "-gDUTY_DIRECTION_G_TB=$DUTY_DIRECTION_G_TB_Job" `
                     "-gSEARCH_CENTER_MODE_G_TB=$SEARCH_CENTER_MODE_G_TB_Job" `
+                    "-gRESET_ON_DATE_CHANGE_G_TB=$RESET_ON_DATE_CHANGE_G_TB_Job" `
                     -do "run -all; quit -f" *> $null
 
                 $ExitCode = $LASTEXITCODE
@@ -344,7 +348,8 @@ try {
             $ERROR_GAIN_G_TB, `
             $DELTA_V_MIN_G_TB, `
             $DUTY_DIRECTION_G_TB, `
-            $SEARCH_CENTER_MODE_G_TB
+            $SEARCH_CENTER_MODE_G_TB, `
+            $RESET_ON_DATE_CHANGE_G_TB
 
         $Jobs += $Job
     }

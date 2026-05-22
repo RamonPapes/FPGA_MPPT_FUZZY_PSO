@@ -57,11 +57,12 @@ begin
         if pno_dir = 0 then
             pno_dir := sign_int(fuzzy_next);
         end if;
-        if pno_dir = 0 then
-            pno_dir := 1;
-        end if;
 
-        refined_next := clamp(duty_in + (DUTY_DIRECTION_G * pno_dir * step_next), DUTY_MIN, DUTY_MAX);
+        if pno_dir = 0 then
+            refined_next := duty_in;
+        else
+            refined_next := clamp(duty_in + (DUTY_DIRECTION_G * pno_dir * step_next), DUTY_MIN, DUTY_MAX);
+        end if;
 
         fuzzy_delta <= fuzzy_next;
         fokker_step <= step_next;

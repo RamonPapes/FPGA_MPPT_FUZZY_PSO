@@ -28,7 +28,8 @@ entity tb_hybrid_pso_fuzzy_export is
         ERROR_GAIN_G_TB      : integer := 1;
         DELTA_V_MIN_G_TB     : integer := 16;
         DUTY_DIRECTION_G_TB  : integer := -1;
-        SEARCH_CENTER_MODE_G_TB : integer := 1
+        SEARCH_CENTER_MODE_G_TB : integer := 1;
+        RESET_ON_DATE_CHANGE_G_TB : integer := 1
     );
 end tb_hybrid_pso_fuzzy_export;
 
@@ -42,6 +43,7 @@ architecture sim of tb_hybrid_pso_fuzzy_export is
     signal voltage_in      : signed(15 downto 0) := (others => '0');
 
     signal duty_out        : std_logic_vector(7 downto 0);
+    signal control_duty_out : integer := 0;
     signal store_valid     : std_logic;
 
     signal gbest_duty_out  : integer := 0;
@@ -97,6 +99,7 @@ begin
             voltage_in      => voltage_in,
 
             duty_out        => duty_out,
+            control_duty_out => control_duty_out,
             store_valid     => store_valid,
 
             gbest_duty_out  => gbest_duty_out,
@@ -131,6 +134,7 @@ begin
         variable curr_val   : integer;
         variable power_now  : integer;
         variable sample_idx : integer := 0;
+        variable prev_timestamp_date : integer := 0;
     begin
 
         voltage_in <= to_signed(0, 16);
@@ -143,7 +147,7 @@ begin
 
         wait until rising_edge(clk);
 
-        write(out_line, string'("sample timestamp_date timestamp_time voltage current power_now duty gbest_duty gbest_power error delta_e fuzzy_delta "));
+        write(out_line, string'("sample timestamp_date timestamp_time voltage current power_now duty control_duty gbest_duty gbest_power error delta_e fuzzy_delta "));
         write(out_line, string'("W_PSO C1_PSO C2_PSO RHO_MIN RHO_MAX VEL_MIN VEL_MAX DEADZONE SEARCH_RADIUS FOKKER_STEP_MIN FOKKER_STEP_MAX FUZZY_STEP FUZZY_EDGE POWER_SCALE_DEN ERROR_GAIN DELTA_V_MIN"));
         writeline(result_file, out_line);
 
@@ -159,6 +163,18 @@ begin
                 power_now := (volt_val * curr_val) / 1;
             else
                 power_now := (volt_val * curr_val) / POWER_SCALE_DEN_G_TB;
+            end if;
+
+            if RESET_ON_DATE_CHANGE_G_TB /= 0 then
+                if prev_timestamp_date /= 0 and timestamp_date /= prev_timestamp_date then
+                    enable <= '0';
+                    reset <= '1';
+                    wait until rising_edge(clk);
+                    wait until rising_edge(clk);
+                    reset <= '0';
+                    enable <= '1';
+                    wait until rising_edge(clk);
+                end if;
             end if;
 
             wait until rising_edge(clk);
@@ -193,6 +209,9 @@ begin
             write(out_line, string'(" "));
 
             write(out_line, to_integer(unsigned(duty_out)));
+            write(out_line, string'(" "));
+
+            write(out_line, control_duty_out);
             write(out_line, string'(" "));
 
             write(out_line, gbest_duty_out);
@@ -260,6 +279,7 @@ begin
             writeline(result_file, out_line);
 
             sample_idx := sample_idx + 1;
+            prev_timestamp_date := timestamp_date;
 
             wait until rising_edge(clk);
             wait until store_valid = '0' for 10 ms;

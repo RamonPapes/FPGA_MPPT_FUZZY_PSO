@@ -189,7 +189,9 @@ def calculate_metrics(result_file: Path) -> dict[str, float]:
     if missing:
         raise ValueError(f"{result_file.name} sem colunas obrigatorias: {sorted(missing)}")
 
-    for col in required:
+    optional_numeric = {"control_duty"} & set(df.columns)
+
+    for col in required | optional_numeric:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
     df = df.dropna(subset=["sample", "timestamp_date", "timestamp_time"])
@@ -233,15 +235,18 @@ def calculate_metrics(result_file: Path) -> dict[str, float]:
 
                 steady = day_df[day_df["sample"] >= first_conv["sample"]]
 
-        duty_diff = day_df["duty"].diff().abs().dropna()
+        duty_col = "control_duty" if "control_duty" in day_df.columns else "duty"
+        duty = pd.to_numeric(day_df[duty_col], errors="coerce")
+        steady_duty = pd.to_numeric(steady[duty_col], errors="coerce")
+        duty_diff = duty.diff().abs().dropna()
 
         daily_rows.append({
             "P_best_final": p_best_final,
             "N_conv_98": float(n_conv_98),
             "T_conv_98_seconds": float(t_conv_98),
-            "duty_std_after_conv": std_or_zero(steady["duty"]),
+            "duty_std_after_conv": std_or_zero(steady_duty),
             "duty_step_mean": mean_or_zero(duty_diff),
-            "duty_range_after_conv": float(steady["duty"].max() - steady["duty"].min()) if len(steady) else 0.0,
+            "duty_range_after_conv": float(steady_duty.max() - steady_duty.min()) if len(steady_duty) else 0.0,
             "P_ripple_after_conv": std_or_zero(steady["power_now"]),
             "mean_abs_error": mean_or_zero(day_df["error"].abs()),
             "std_abs_error": std_or_zero(day_df["error"].abs()),

@@ -127,6 +127,7 @@ def read_result_file(path: Path) -> pd.DataFrame:
     ]
 
     optional_numeric_cols = [
+        "control_duty",
         "gbest_power",
         "POWER_SCALE_DEN",
     ]
@@ -144,12 +145,14 @@ def read_result_file(path: Path) -> pd.DataFrame:
     df["timestamp_seconds"] = df["timestamp_time"].apply(parse_hhmmss_to_seconds)
 
     if "gbest_power" in df.columns:
-        df["expected_gbest_power"] = df["power_now"].cummax()
+        df["expected_gbest_power"] = (
+            df.groupby("timestamp_date")["power_now"].cummax()
+        )
         df["gbest_consistency_violation"] = (
             df["gbest_power"] != df["expected_gbest_power"]
         ).astype(int)
         df["gbest_monotonic_violation"] = (
-            df["gbest_power"].diff().fillna(0) < 0
+            df.groupby("timestamp_date")["gbest_power"].diff().fillna(0) < 0
         ).astype(int)
     else:
         df["gbest_consistency_violation"] = 0
@@ -158,13 +161,17 @@ def read_result_file(path: Path) -> pd.DataFrame:
     return df
 
 
-def find_duty_stable_point(day_df: pd.DataFrame) -> tuple[pd.Series | None, int]:
+def duty_metric_col(day_df: pd.DataFrame) -> str:
+    return "control_duty" if "control_duty" in day_df.columns else "duty"
+
+
+def find_duty_stable_point(day_df: pd.DataFrame, duty_col: str) -> tuple[pd.Series | None, int]:
     window = min(DUTY_STABLE_WINDOW, max(20, len(day_df) // 10))
 
     if len(day_df) < window:
         return None, window
 
-    duty = pd.to_numeric(day_df["duty"], errors="coerce")
+    duty = pd.to_numeric(day_df[duty_col], errors="coerce")
     duty_step = duty.diff().abs().fillna(0.0)
 
     rolling_std = duty.rolling(window, min_periods=window).std()
@@ -237,8 +244,8 @@ def calculate_day_metrics(month: str, date_value: int, day_df: pd.DataFrame) -> 
     # IMPORTANTE:
     # Aqui a convergencia diaria NAO usa gbest_power do VHDL.
     # O gbest_power do VHDL e acumulado ao longo da simulacao mensal.
-    # Como nao estamos resetando o controlador a cada dia, usar gbest_power
-    # causaria N_conv_98 = 0 em dias posteriores.
+    # Usar um gbest global causaria N_conv_98 = 0 em dias posteriores quando
+    # a melhor potencia ja apareceu em um dia anterior.
     #
     # Portanto, para manter a analise diaria sem rodar dia por dia,
     # calculamos um "gbest local" apenas para a janela daquele dia:
@@ -276,10 +283,11 @@ def calculate_day_metrics(month: str, date_value: int, day_df: pd.DataFrame) -> 
             steady = day_df[day_df["sample"] >= first_conv["sample"]]
 
     abs_error = day_df["error"].abs()
-    duty = pd.to_numeric(day_df["duty"], errors="coerce")
+    duty_col = duty_metric_col(day_df)
+    duty = pd.to_numeric(day_df[duty_col], errors="coerce")
     duty_step = duty.diff().abs().fillna(0.0)
 
-    stable_point, _ = find_duty_stable_point(day_df)
+    stable_point, _ = find_duty_stable_point(day_df, duty_col)
 
     if stable_point is None:
         duty_converged = 0
@@ -299,7 +307,7 @@ def calculate_day_metrics(month: str, date_value: int, day_df: pd.DataFrame) -> 
 
         duty_steady = day_df[day_df["sample"] >= stable_point["sample"]]
 
-    duty_steady_values = pd.to_numeric(duty_steady["duty"], errors="coerce")
+    duty_steady_values = pd.to_numeric(duty_steady[duty_col], errors="coerce")
     duty_steady_step = duty_steady_values.diff().abs().fillna(0.0)
     duty_saturation = (duty <= 0) | (duty >= 100)
     duty_steady_saturation = (duty_steady_values <= 0) | (duty_steady_values >= 100)
@@ -334,7 +342,7 @@ def calculate_day_metrics(month: str, date_value: int, day_df: pd.DataFrame) -> 
             duty_range=duty_range_stable,
             saturation_percent=duty_sat_stable,
         ),
-        "duty_std_after_conv": std_or_zero(steady["duty"]),
+        "duty_std_after_conv": std_or_zero(steady[duty_col]),
         "P_ripple_after_conv": std_or_zero(steady["power_now"]),
         "mean_abs_error": mean_or_zero(abs_error),
         "std_abs_error": std_or_zero(abs_error),
