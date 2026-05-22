@@ -16,10 +16,21 @@ DAILY_COLUMNS = [
     "duty_converged",
     "N_conv_duty_stable",
     "T_conv_duty_stable_seconds",
+    "duty_mean",
+    "duty_std",
+    "duty_min",
+    "duty_max",
+    "duty_range",
+    "duty_step_mean",
+    "duty_step_max",
     "duty_mean_after_stable",
     "duty_std_after_stable",
     "duty_step_mean_after_stable",
     "duty_range_after_stable",
+    "duty_final_mean",
+    "duty_final_std",
+    "duty_final_range",
+    "duty_final_step_mean",
     "duty_saturation_percent",
     "duty_saturation_after_stable_percent",
     "gbest_consistency_violations",
@@ -27,7 +38,14 @@ DAILY_COLUMNS = [
     "stability_score",
     "duty_std_after_conv",
     "P_ripple_after_conv",
+    "error_mean",
     "mean_abs_error",
+    "max_abs_error",
+    "error_saturation_percent",
+    "delta_e_mean",
+    "mean_abs_delta_e",
+    "max_abs_delta_e",
+    "delta_e_saturation_percent",
     "std_abs_error",
 ]
 
@@ -43,6 +61,14 @@ for metric_col in SUMMARY_METRIC_COLUMNS:
 DUTY_STABLE_WINDOW = 200
 DUTY_STD_THRESHOLD = 1.0
 DUTY_STEP_THRESHOLD = 0.75
+DUTY_FINAL_BAND = 2.0
+
+SENTINEL_NEGATIVE_COLUMNS = {
+    "N_conv_98",
+    "T_conv_98_seconds",
+    "N_conv_duty_stable",
+    "T_conv_duty_stable_seconds",
+}
 
 
 def parse_month_name(path: Path) -> str:
@@ -128,6 +154,9 @@ def read_result_file(path: Path) -> pd.DataFrame:
 
     optional_numeric_cols = [
         "control_duty",
+        "delta_e",
+        "fuzzy_delta",
+        "gbest_duty",
         "gbest_power",
         "POWER_SCALE_DEN",
     ]
@@ -171,23 +200,38 @@ def find_duty_stable_point(day_df: pd.DataFrame, duty_col: str) -> tuple[pd.Seri
     if len(day_df) < window:
         return None, window
 
-    duty = pd.to_numeric(day_df[duty_col], errors="coerce")
-    duty_step = duty.diff().abs().fillna(0.0)
+    duty = pd.to_numeric(day_df[duty_col], errors="coerce").reset_index(drop=True)
+    final_duty = duty.tail(window).dropna()
 
-    rolling_std = duty.rolling(window, min_periods=window).std()
-    rolling_step = duty_step.rolling(window, min_periods=window).mean()
-
-    stable = (
-        (rolling_std <= DUTY_STD_THRESHOLD)
-        & (rolling_step <= DUTY_STEP_THRESHOLD)
-    )
-
-    stable_rows = day_df[stable]
-
-    if stable_rows.empty:
+    if final_duty.empty:
         return None, window
 
-    return stable_rows.iloc[0], window
+    final_center = float(final_duty.median())
+    within_final_band = (duty - final_center).abs() <= DUTY_FINAL_BAND
+
+    # Convergencia aqui significa estabilidade ate o fim do dia, nao apenas
+    # a primeira janela quieta. A versao anterior aceitava a primeira janela
+    # de 200 amostras e gerava falso N_conv=199 mesmo quando o duty mudava depois.
+    tail_stays_in_band = within_final_band.iloc[::-1].cummin().iloc[::-1].astype(bool)
+    min_tail_len = window
+
+    for pos, stable_to_end in enumerate(tail_stays_in_band):
+        if not stable_to_end:
+            continue
+
+        if len(day_df) - pos < min_tail_len:
+            break
+
+        tail_duty = duty.iloc[pos:]
+        tail_step = tail_duty.diff().abs().dropna()
+
+        if (
+            std_or_zero(tail_duty) <= DUTY_STD_THRESHOLD
+            and mean_or_zero(tail_step) <= DUTY_STEP_THRESHOLD
+        ):
+            return day_df.iloc[pos], window
+
+    return None, window
 
 
 def stability_score(
@@ -226,10 +270,21 @@ def calculate_day_metrics(month: str, date_value: int, day_df: pd.DataFrame) -> 
             "duty_converged": 0,
             "N_conv_duty_stable": -1,
             "T_conv_duty_stable_seconds": -1.0,
+            "duty_mean": 0.0,
+            "duty_std": 0.0,
+            "duty_min": 0.0,
+            "duty_max": 0.0,
+            "duty_range": 0.0,
+            "duty_step_mean": 0.0,
+            "duty_step_max": 0.0,
             "duty_mean_after_stable": 0.0,
             "duty_std_after_stable": 0.0,
             "duty_step_mean_after_stable": 0.0,
             "duty_range_after_stable": 0.0,
+            "duty_final_mean": 0.0,
+            "duty_final_std": 0.0,
+            "duty_final_range": 0.0,
+            "duty_final_step_mean": 0.0,
             "duty_saturation_percent": 0.0,
             "duty_saturation_after_stable_percent": 0.0,
             "gbest_consistency_violations": 0,
@@ -237,7 +292,14 @@ def calculate_day_metrics(month: str, date_value: int, day_df: pd.DataFrame) -> 
             "stability_score": 0.0,
             "duty_std_after_conv": 0.0,
             "P_ripple_after_conv": 0.0,
+            "error_mean": 0.0,
             "mean_abs_error": 0.0,
+            "max_abs_error": 0.0,
+            "error_saturation_percent": 0.0,
+            "delta_e_mean": 0.0,
+            "mean_abs_delta_e": 0.0,
+            "max_abs_delta_e": 0.0,
+            "delta_e_saturation_percent": 0.0,
             "std_abs_error": 0.0,
         }
 
@@ -282,10 +344,22 @@ def calculate_day_metrics(month: str, date_value: int, day_df: pd.DataFrame) -> 
 
             steady = day_df[day_df["sample"] >= first_conv["sample"]]
 
-    abs_error = day_df["error"].abs()
     duty_col = duty_metric_col(day_df)
     duty = pd.to_numeric(day_df[duty_col], errors="coerce")
     duty_step = duty.diff().abs().fillna(0.0)
+    duty_window = min(DUTY_STABLE_WINDOW, max(20, len(day_df) // 10))
+    duty_final_values = duty.tail(duty_window)
+    duty_final_step = duty_final_values.diff().abs().fillna(0.0)
+
+    error = pd.to_numeric(day_df["error"], errors="coerce")
+    abs_error = error.abs()
+
+    if "delta_e" in day_df.columns:
+        delta_e = pd.to_numeric(day_df["delta_e"], errors="coerce")
+    else:
+        delta_e = pd.Series(0.0, index=day_df.index)
+
+    abs_delta_e = delta_e.abs()
 
     stable_point, _ = find_duty_stable_point(day_df, duty_col)
 
@@ -293,7 +367,7 @@ def calculate_day_metrics(month: str, date_value: int, day_df: pd.DataFrame) -> 
         duty_converged = 0
         n_conv_duty_stable = -1
         t_conv_duty_stable = -1.0
-        duty_steady = day_df.tail(min(len(day_df), DUTY_STABLE_WINDOW))
+        duty_steady = day_df.tail(duty_window)
     else:
         duty_converged = 1
         first_sample = int(day_df.iloc[0]["sample"])
@@ -327,10 +401,21 @@ def calculate_day_metrics(month: str, date_value: int, day_df: pd.DataFrame) -> 
         "duty_converged": duty_converged,
         "N_conv_duty_stable": int(n_conv_duty_stable),
         "T_conv_duty_stable_seconds": float(t_conv_duty_stable),
+        "duty_mean": mean_or_zero(duty),
+        "duty_std": std_or_zero(duty),
+        "duty_min": float(duty.min()),
+        "duty_max": float(duty.max()),
+        "duty_range": float(duty.max() - duty.min()),
+        "duty_step_mean": mean_or_zero(duty_step),
+        "duty_step_max": float(duty_step.max()),
         "duty_mean_after_stable": mean_or_zero(duty_steady_values),
         "duty_std_after_stable": duty_std_stable,
         "duty_step_mean_after_stable": duty_step_mean_stable,
         "duty_range_after_stable": duty_range_stable,
+        "duty_final_mean": mean_or_zero(duty_final_values),
+        "duty_final_std": std_or_zero(duty_final_values),
+        "duty_final_range": float(duty_final_values.max() - duty_final_values.min()),
+        "duty_final_step_mean": mean_or_zero(duty_final_step),
         "duty_saturation_percent": float(duty_saturation.mean() * 100.0),
         "duty_saturation_after_stable_percent": duty_sat_stable,
         "gbest_consistency_violations": int(day_df["gbest_consistency_violation"].sum()),
@@ -344,7 +429,14 @@ def calculate_day_metrics(month: str, date_value: int, day_df: pd.DataFrame) -> 
         ),
         "duty_std_after_conv": std_or_zero(steady[duty_col]),
         "P_ripple_after_conv": std_or_zero(steady["power_now"]),
+        "error_mean": mean_or_zero(error),
         "mean_abs_error": mean_or_zero(abs_error),
+        "max_abs_error": float(abs_error.max()),
+        "error_saturation_percent": float((abs_error >= 100).mean() * 100.0),
+        "delta_e_mean": mean_or_zero(delta_e),
+        "mean_abs_delta_e": mean_or_zero(abs_delta_e),
+        "max_abs_delta_e": float(abs_delta_e.max()),
+        "delta_e_saturation_percent": float((abs_delta_e >= 100).mean() * 100.0),
         "std_abs_error": std_or_zero(abs_error),
     }
 
@@ -357,7 +449,10 @@ def summarize_month(month: str, daily_df: pd.DataFrame) -> dict[str, float | int
 
     for col in SUMMARY_METRIC_COLUMNS:
         valid = pd.to_numeric(daily_df[col], errors="coerce")
-        valid = valid[valid >= 0].dropna()
+        valid = valid.dropna()
+
+        if col in SENTINEL_NEGATIVE_COLUMNS:
+            valid = valid[valid >= 0]
 
         summary[f"{col}_mean"] = float(valid.mean()) if len(valid) else 0.0
         summary[f"{col}_std"] = float(valid.std(ddof=1)) if len(valid) > 1 else 0.0
