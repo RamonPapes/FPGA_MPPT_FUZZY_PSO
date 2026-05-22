@@ -133,22 +133,36 @@ def plot_day_inputs_and_fuzzy(
 
     fig, axes = plt.subplots(4, 1, figsize=(11, 8), sharex=True)
 
-    axes[0].plot(x, voltage)
+    tcc_line_style = {
+        "linewidth": 0.9,
+        "solid_capstyle": "butt",
+    }
+
+    axes[0].plot(x, voltage, color="blue", **tcc_line_style)
     axes[0].set_title("Input - Vpv")
     axes[0].set_ylabel("Voltage (V)")
 
-    axes[1].plot(x, current)
+    axes[1].plot(x, current, color="red", **tcc_line_style)
     axes[1].set_title("Input - Ipv")
     axes[1].set_ylabel("Current (p.u.)")
 
-    axes[2].plot(x, day_df["error"])
+    axes[2].plot(x, day_df["error"], color="magenta", **tcc_line_style)
     axes[2].set_title("Error (dP/dV)")
     axes[2].set_ylabel("Error")
+    axes[2].set_ylim(-110, 110)
 
-    axes[3].plot(x, day_df["delta_e"])
+    axes[3].plot(x, day_df["delta_e"], color="cyan", **tcc_line_style)
     axes[3].set_title("CE (dE)")
     axes[3].set_ylabel("CE")
     axes[3].set_xlabel("Samples")
+    axes[3].set_ylim(-110, 110)
+
+    for ax in axes:
+        ax.grid(True, color="0.75", linewidth=0.5, alpha=0.6)
+        ax.tick_params(direction="in", top=True, right=True)
+        for spine in ax.spines.values():
+            spine.set_color("black")
+            spine.set_linewidth(0.8)
 
     if stable_sample is not None and stable_sample >= 0:
         for ax in axes:

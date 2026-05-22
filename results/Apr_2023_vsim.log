@@ -25,3 +25,10 @@
 # Loading work.tb_hybrid_pso_fuzzy_export(sim)#1
 # Loading work.hybrid_pso_fuzzy_mppt(structural)#1
 # run -all
+# ** Failure: Simulation finished successfully.
+#    Time: 11190270 ns  Iteration: 0  Process: /tb_hybrid_pso_fuzzy_export/stim_proc File: tb_hybrid_pso_fuzzy_export.vhd
+# Break in Process stim_proc at tb_hybrid_pso_fuzzy_export.vhd line 274
+# Stopped at tb_hybrid_pso_fuzzy_export.vhd line 274
+#  quit -f
+# End time: 19:13:02 on May 22,2026, Elapsed time: 0:03:58
+# Errors: 1, Warnings: 0
