@@ -23,7 +23,7 @@ A reprodução dos experimentos é feita em duas etapas: primeiro, realiza-se a 
 Para buscar os hiperparâmetros, execute:
 
 ```powershell 
-    python .\optimize_hyperparameters.py
+    python .\scripts\optimize_hyperparameters.py
 ```
 
 Para rodar os experimentos finais, execute:
@@ -31,7 +31,7 @@ Para rodar os experimentos finais, execute:
     .\run_experiment.ps1 -CleanWork
 ```
 
-O script ```run_experiment.ps1``` realiza o pré-processamento dos dados, compila os arquivos VHDL, executa o testbench e gera os arquivos de resultado na pasta ```results/```.
+O script ```run_experiment.ps1``` realiza o pré-processamento dos dados, compila os arquivos VHDL, executa o testbench, calcula as métricas e gera os gráficos. Os arquivos gerados ficam em ```results/```, com os dados pré-processados em ```results/dados_pre_processados/``` e os gráficos em ```results/graficos_uteis/```.
 
 ## Referência
 

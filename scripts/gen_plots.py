@@ -465,7 +465,7 @@ def plot_tradeoff_scatter(general_df: pd.DataFrame, output_dir: Path) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--results-dir", default="results")
-    parser.add_argument("--output-dir", default="graficos_uteis")
+    parser.add_argument("--output-dir", default="results/graficos_uteis")
     parser.add_argument("--day-result-file", default="Apr_2023_results.txt")
     parser.add_argument("--target-date", type=int, default=20230415)
     parser.add_argument("--voltage-scale", type=float, default=16.0)

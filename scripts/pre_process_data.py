@@ -252,7 +252,7 @@ def convert_csv(
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--archive-dir", default="archive")
-    parser.add_argument("--output-dir", default="dados_pre_processados")
+    parser.add_argument("--output-dir", default="results/dados_pre_processados")
     parser.add_argument("--timestamp-col", default="Timestamp")
     parser.add_argument("--power-col", default="PVPCS_Active_Power")
     parser.add_argument("--voltage-col", default="MG-LV-MSB_AC_Voltage")

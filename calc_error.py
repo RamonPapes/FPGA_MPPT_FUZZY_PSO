@@ -101,7 +101,7 @@ def analyze(
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset", default="dados_pre_processados/Apr_2023_dataset.txt")
+    parser.add_argument("--dataset", default="results/dados_pre_processados/Apr_2023_dataset.txt")
     parser.add_argument("--power-scale-den", type=int, default=65536)
     parser.add_argument("--target-error", type=int, default=80)
     parser.add_argument("--percentile", type=float, default=95)

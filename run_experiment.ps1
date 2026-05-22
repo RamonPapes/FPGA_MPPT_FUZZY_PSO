@@ -1,8 +1,10 @@
 param(
     [string]$ProjectRoot = ".",
     [string]$ArchiveDir = "archive",
+    [string]$ScriptsDir = "scripts",
     [string]$ResultsDir = "results",
     [string]$PreprocessedDir = "dados_pre_processados",
+    [string]$PlotsDir = "graficos_uteis",
     [string]$PythonExe = "python",
     [string]$PowerColumn = "PVPCS_Active_Power",
     [string]$VoltageColumn = "MG-LV-MSB_AC_Voltage",
@@ -12,6 +14,8 @@ param(
     [string]$CurrentFormat = "q1.15-normalized",
     [double]$CurrentBaseAmps = 0.0,
     [double]$CurrentQ15Scale = 32767.0,
+    [string]$PlotDayResultFile = "Apr_2023_results.txt",
+    [int]$PlotTargetDate = 20230415,
     [int]$MaxParallel = 4,
     [switch]$CleanWork,
 
@@ -42,17 +46,33 @@ if ($MaxParallel -lt 1) {
     throw "MaxParallel deve ser maior ou igual a 1."
 }
 
+function Resolve-FromBase {
+    param(
+        [string]$BasePath,
+        [string]$PathText
+    )
+
+    if ([System.IO.Path]::IsPathRooted($PathText)) {
+        return $PathText
+    }
+
+    return (Join-Path $BasePath $PathText)
+}
+
 $ProjectRoot = (Resolve-Path $ProjectRoot).Path
-$ArchivePath = Join-Path $ProjectRoot $ArchiveDir
-$ResultsPath = Join-Path $ProjectRoot $ResultsDir
-$PreprocessedPath = Join-Path $ProjectRoot $PreprocessedDir
+$ArchivePath = Resolve-FromBase $ProjectRoot $ArchiveDir
+$ScriptsPath = Resolve-FromBase $ProjectRoot $ScriptsDir
+$ResultsPath = Resolve-FromBase $ProjectRoot $ResultsDir
+$PreprocessedPath = Resolve-FromBase $ResultsPath $PreprocessedDir
+$PlotsPath = Resolve-FromBase $ResultsPath $PlotsDir
 
 $PkgFile = Join-Path $ProjectRoot "hybrid_mppt_pkg.vhd"
 $TopFile = Join-Path $ProjectRoot "hybrid_pso_fuzzy_mppt.vhd"
 $TbFile  = Join-Path $ProjectRoot "tb_hybrid_pso_fuzzy_export.vhd"
 
-$PreprocessScript = Join-Path $ProjectRoot "pre_process_data.py"
-$MetricsScript = Join-Path $ProjectRoot "gen_results.py"
+$PreprocessScript = Join-Path $ScriptsPath "pre_process_data.py"
+$MetricsScript = Join-Path $ScriptsPath "gen_results.py"
+$PlotsScript = Join-Path $ScriptsPath "gen_plots.py"
 
 if (-not (Test-Path $ArchivePath)) {
     throw "Pasta archive nao encontrada: $ArchivePath"
@@ -78,8 +98,13 @@ if (-not (Test-Path $MetricsScript)) {
     throw "Script Python de metricas nao encontrado: $MetricsScript"
 }
 
+if (-not (Test-Path $PlotsScript)) {
+    throw "Script Python de graficos nao encontrado: $PlotsScript"
+}
+
 New-Item -ItemType Directory -Force -Path $ResultsPath | Out-Null
 New-Item -ItemType Directory -Force -Path $PreprocessedPath | Out-Null
+New-Item -ItemType Directory -Force -Path $PlotsPath | Out-Null
 
 if ($CleanWork -and (Test-Path (Join-Path $ProjectRoot "work"))) {
     Remove-Item -Recurse -Force (Join-Path $ProjectRoot "work")
@@ -366,9 +391,19 @@ try {
     & $PythonExe $MetricsScript --results-dir $ResultsPath
 
     Write-Host ""
+    Write-Host "=== Gerando graficos ==="
+
+    & $PythonExe $PlotsScript `
+        --results-dir $ResultsPath `
+        --output-dir $PlotsPath `
+        --day-result-file $PlotDayResultFile `
+        --target-date $PlotTargetDate
+
+    Write-Host ""
     Write-Host "Processo finalizado."
     Write-Host "Dados pre-processados: $PreprocessedPath"
     Write-Host "Resultados: $ResultsPath"
+    Write-Host "Graficos: $PlotsPath"
 }
 finally {
     Pop-Location

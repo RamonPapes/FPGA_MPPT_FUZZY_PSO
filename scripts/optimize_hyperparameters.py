@@ -509,8 +509,8 @@ def build_stage2_param_sets(
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--project-dir", default=".")
-    parser.add_argument("--dataset", default="dados_pre_processados/Apr_2023_dataset.txt")
-    parser.add_argument("--out-dir", default="optimization_runs")
+    parser.add_argument("--dataset", default="results/dados_pre_processados/Apr_2023_dataset.txt")
+    parser.add_argument("--out-dir", default="results/optimization_runs")
     parser.add_argument("--n-days", type=int, default=5)
 
     parser.add_argument("--stage", choices=["stage1", "stage2", "both"], default="both")
