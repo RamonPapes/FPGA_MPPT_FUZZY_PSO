@@ -105,11 +105,14 @@ def main() -> None:
     parser.add_argument("--power-scale-den", type=int, default=65536)
     parser.add_argument("--target-error", type=int, default=80)
     parser.add_argument("--percentile", type=float, default=95)
-    parser.add_argument("--output", default="error_scaling_analysis.csv")
+    parser.add_argument("--output", default="results/error_scaling_analysis.csv")
 
     args = parser.parse_args()
 
-    dataset = Path(args.dataset)
+    dataset = Path(args.dataset).resolve()
+    output = Path(args.output).resolve()
+    output.parent.mkdir(parents=True, exist_ok=True)
+
     df = load_dataset(dataset)
 
     result = analyze(
@@ -120,10 +123,10 @@ def main() -> None:
         percentile=args.percentile,
     )
 
-    result.to_csv(args.output, index=False)
+    result.to_csv(output, index=False)
 
     print(result.to_string(index=False))
-    print(f"\nArquivo salvo em: {args.output}")
+    print(f"\nArquivo salvo em: {output}")
 
 
 if __name__ == "__main__":
