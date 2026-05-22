@@ -4,6 +4,9 @@ import argparse
 from pathlib import Path
 
 import pandas as pd
+import matplotlib
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 
@@ -43,13 +46,37 @@ def read_result_file(path: Path) -> pd.DataFrame:
     if missing:
         raise ValueError(f"{path.name} nao possui as colunas obrigatorias: {sorted(missing)}")
 
-    for col in required:
+    optional_numeric = {
+        "gbest_duty",
+        "gbest_power",
+        "fuzzy_delta",
+        "POWER_SCALE_DEN",
+    }
+
+    for col in required | (optional_numeric & set(df.columns)):
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
     df = df.dropna(subset=["sample", "timestamp_date", "timestamp_time"])
     df["timestamp_date"] = df["timestamp_date"].astype(int)
 
     return df
+
+
+def get_day_metric(daily_df: pd.DataFrame | None, target_date: int, column: str) -> float | None:
+    if daily_df is None or column not in daily_df.columns:
+        return None
+
+    rows = daily_df[daily_df["timestamp_date"] == target_date]
+
+    if rows.empty:
+        return None
+
+    value = pd.to_numeric(rows.iloc[0][column], errors="coerce")
+
+    if pd.isna(value):
+        return None
+
+    return float(value)
 
 
 def read_general_metrics(path: Path) -> pd.DataFrame:
@@ -89,6 +116,7 @@ def plot_day_inputs_and_fuzzy(
     target_date: int,
     voltage_scale: float,
     current_scale: float,
+    daily_df: pd.DataFrame | None = None,
 ) -> None:
     df = read_result_file(result_file)
     day_df = df[df["timestamp_date"] == target_date].sort_values("sample").copy()
@@ -98,6 +126,7 @@ def plot_day_inputs_and_fuzzy(
 
     month = parse_month_name(result_file)
     x = range(len(day_df))
+    stable_sample = get_day_metric(daily_df, target_date, "N_conv_duty_stable")
 
     voltage = day_df["voltage"] / voltage_scale
     current = day_df["current"] / current_scale
@@ -106,11 +135,11 @@ def plot_day_inputs_and_fuzzy(
 
     axes[0].plot(x, voltage)
     axes[0].set_title("Input - Vpv")
-    axes[0].set_ylabel("Voltage")
+    axes[0].set_ylabel("Voltage (V)")
 
     axes[1].plot(x, current)
     axes[1].set_title("Input - Ipv")
-    axes[1].set_ylabel("Current")
+    axes[1].set_ylabel("Current (A)")
 
     axes[2].plot(x, day_df["error"])
     axes[2].set_title("Error (dP/dV)")
@@ -121,6 +150,10 @@ def plot_day_inputs_and_fuzzy(
     axes[3].set_ylabel("CE")
     axes[3].set_xlabel("Samples")
 
+    if stable_sample is not None and stable_sample >= 0:
+        for ax in axes:
+            ax.axvline(stable_sample, color="tab:green", linestyle="--", linewidth=1)
+
     fig.tight_layout()
 
     output_path = output_dir / f"{month}_{target_date}_inputs_error_ce.png"
@@ -129,6 +162,11 @@ def plot_day_inputs_and_fuzzy(
 
     fig, ax = plt.subplots(figsize=(9, 5))
     ax.plot(x, day_df["duty"])
+    if "gbest_duty" in day_df.columns:
+        ax.plot(x, day_df["gbest_duty"], linewidth=1, alpha=0.75, label="gbest duty")
+        ax.legend()
+    if stable_sample is not None and stable_sample >= 0:
+        ax.axvline(stable_sample, color="tab:green", linestyle="--", linewidth=1)
     ax.set_title(f"Duty Cycle - {target_date}")
     ax.set_xlabel("Samples")
     ax.set_ylabel("Duty Cycle (%)")
@@ -142,9 +180,12 @@ def plot_day_inputs_and_fuzzy(
 
     fig, ax = plt.subplots(figsize=(9, 5))
     ax.plot(x, day_df["power_now"])
+    if "gbest_power" in day_df.columns:
+        ax.plot(x, day_df["gbest_power"], linewidth=1, alpha=0.75, label="gbest power")
+        ax.legend()
     ax.set_title(f"Power - {target_date}")
     ax.set_xlabel("Samples")
-    ax.set_ylabel("Power")
+    ax.set_ylabel("Power (W)")
     ax.grid(True)
 
     fig.tight_layout()
@@ -193,37 +234,51 @@ def plot_monthly_comparisons(general_df: pd.DataFrame, output_dir: Path) -> None
         (
             "P_best_final_mean",
             "P_best_final_std",
-            "Potencia maxima diaria media por mes",
-            "Power",
+            "Potencia maxima diaria do historico",
+            "Power (W)",
             "monthly_p_best_final.png",
         ),
         (
-            "N_conv_98_mean",
-            "N_conv_98_std",
-            "Amostras ate 98% da melhor potencia diaria",
+            "N_conv_duty_stable_mean",
+            "N_conv_duty_stable_std",
+            "Amostras ate estabilidade do duty",
             "Samples",
-            "monthly_n_conv_98.png",
+            "monthly_n_conv_duty_stable.png",
         ),
         (
-            "T_conv_98_seconds_mean",
-            "T_conv_98_seconds_std",
-            "Tempo ate 98% da melhor potencia diaria",
+            "T_conv_duty_stable_seconds_mean",
+            "T_conv_duty_stable_seconds_std",
+            "Tempo ate estabilidade do duty",
             "Seconds",
-            "monthly_t_conv_98_seconds.png",
+            "monthly_t_conv_duty_stable_seconds.png",
         ),
         (
-            "duty_std_after_conv_mean",
-            "duty_std_after_conv_std",
-            "Oscilacao media do duty apos convergencia",
+            "duty_std_after_stable_mean",
+            "duty_std_after_stable_std",
+            "Oscilacao do duty apos estabilidade",
             "Duty standard deviation",
-            "monthly_duty_std_after_conv.png",
+            "monthly_duty_std_after_stable.png",
         ),
         (
-            "P_ripple_after_conv_mean",
-            "P_ripple_after_conv_std",
-            "Ripple medio de potencia apos convergencia",
-            "Power standard deviation",
-            "monthly_power_ripple_after_conv.png",
+            "duty_step_mean_after_stable_mean",
+            "duty_step_mean_after_stable_std",
+            "Passo medio do duty apos estabilidade",
+            "Mean absolute duty step",
+            "monthly_duty_step_mean_after_stable.png",
+        ),
+        (
+            "duty_saturation_after_stable_percent_mean",
+            "duty_saturation_after_stable_percent_std",
+            "Saturacao do duty apos estabilidade",
+            "Percent",
+            "monthly_duty_saturation_after_stable.png",
+        ),
+        (
+            "stability_score_mean",
+            "stability_score_std",
+            "Score de estabilidade do controlador",
+            "Score",
+            "monthly_stability_score.png",
         ),
         (
             "mean_abs_error_mean",
@@ -245,8 +300,60 @@ def plot_monthly_comparisons(general_df: pd.DataFrame, output_dir: Path) -> None
             filename=filename,
         )
 
+    legacy_plots = [
+        (
+            "N_conv_98_mean",
+            "N_conv_98_std",
+            "Amostras ate 98% da melhor potencia historica",
+            "Samples",
+            "legacy_monthly_n_conv_98.png",
+        ),
+        (
+            "duty_std_after_conv_mean",
+            "duty_std_after_conv_std",
+            "Oscilacao do duty apos 98% da potencia historica",
+            "Duty standard deviation",
+            "legacy_monthly_duty_std_after_conv.png",
+        ),
+        (
+            "P_ripple_after_conv_mean",
+            "P_ripple_after_conv_std",
+            "Variacao historica de potencia apos 98%",
+            "Power standard deviation",
+            "legacy_monthly_power_ripple_after_conv.png",
+        ),
+    ]
+
+    for mean_col, std_col, title, ylabel, filename in legacy_plots:
+        bar_with_error(
+            df=general_df,
+            output_dir=output_dir,
+            mean_col=mean_col,
+            std_col=std_col,
+            title=title,
+            ylabel=ylabel,
+            filename=filename,
+        )
+
 
 def plot_score_like_monthly_summary(general_df: pd.DataFrame, output_dir: Path) -> None:
+    if {"month", "stability_score_mean"}.issubset(general_df.columns):
+        df = general_df.copy()
+        fig, ax = plt.subplots(figsize=(11, 5))
+        ax.bar(
+            df["month"].astype(str),
+            pd.to_numeric(df["stability_score_mean"], errors="coerce"),
+        )
+        ax.set_title("Resumo comparativo de estabilidade por mes")
+        ax.set_ylabel("Stability score")
+        ax.set_xlabel("Month")
+        ax.tick_params(axis="x", rotation=45)
+
+        fig.tight_layout()
+        fig.savefig(output_dir / "monthly_stability_score_like.png", dpi=300)
+        plt.close(fig)
+        return
+
     required = {
         "month",
         "duty_std_after_conv_mean",
@@ -279,11 +386,16 @@ def plot_score_like_monthly_summary(general_df: pd.DataFrame, output_dir: Path) 
 
 def plot_daily_metric_lines(daily_df: pd.DataFrame, output_dir: Path) -> None:
     metrics = [
-        ("P_best_final", "Potencia maxima diaria", "Power", "daily_p_best_final_by_month.png"),
-        ("T_conv_98_seconds", "Tempo diario ate 98% da potencia maxima", "Seconds", "daily_t_conv_98_by_month.png"),
-        ("duty_std_after_conv", "Oscilacao diaria do duty apos convergencia", "Duty standard deviation", "daily_duty_std_by_month.png"),
-        ("P_ripple_after_conv", "Ripple diario de potencia apos convergencia", "Power standard deviation", "daily_power_ripple_by_month.png"),
+        ("P_best_final", "Potencia maxima diaria do historico", "Power (W)", "daily_p_best_final_by_month.png"),
+        ("T_conv_duty_stable_seconds", "Tempo diario ate estabilidade do duty", "Seconds", "daily_t_conv_duty_stable_by_month.png"),
+        ("N_conv_duty_stable", "Amostras ate estabilidade do duty", "Samples", "daily_n_conv_duty_stable_by_month.png"),
+        ("duty_std_after_stable", "Oscilacao diaria do duty apos estabilidade", "Duty standard deviation", "daily_duty_std_after_stable_by_month.png"),
+        ("duty_step_mean_after_stable", "Passo medio diario do duty apos estabilidade", "Mean absolute duty step", "daily_duty_step_mean_after_stable_by_month.png"),
+        ("duty_saturation_after_stable_percent", "Saturacao diaria do duty apos estabilidade", "Percent", "daily_duty_saturation_after_stable_by_month.png"),
+        ("stability_score", "Score diario de estabilidade", "Score", "daily_stability_score_by_month.png"),
         ("mean_abs_error", "Erro absoluto medio diario", "Mean absolute error", "daily_mean_abs_error_by_month.png"),
+        ("gbest_consistency_violations", "Violacoes diarias de consistencia do gbest", "Count", "daily_gbest_consistency_violations.png"),
+        ("gbest_monotonic_violations", "Violacoes diarias de monotonicidade do gbest", "Count", "daily_gbest_monotonic_violations.png"),
     ]
 
     for metric, title, ylabel, filename in metrics:
@@ -309,7 +421,22 @@ def plot_daily_metric_lines(daily_df: pd.DataFrame, output_dir: Path) -> None:
 
 
 def plot_tradeoff_scatter(general_df: pd.DataFrame, output_dir: Path) -> None:
-    required = {"month", "duty_std_after_conv_mean", "T_conv_98_seconds_mean"}
+    if {
+        "month",
+        "duty_std_after_stable_mean",
+        "T_conv_duty_stable_seconds_mean",
+    }.issubset(general_df.columns):
+        x_col = "T_conv_duty_stable_seconds_mean"
+        y_col = "duty_std_after_stable_mean"
+        filename = "tradeoff_duty_convergence_vs_stability.png"
+        title = "Trade-off: convergencia do duty vs estabilidade"
+    else:
+        x_col = "T_conv_98_seconds_mean"
+        y_col = "duty_std_after_conv_mean"
+        filename = "tradeoff_convergence_vs_duty_stability.png"
+        title = "Trade-off: tempo de convergencia vs estabilidade do duty"
+
+    required = {"month", x_col, y_col}
 
     if not required.issubset(general_df.columns):
         print("Pulando scatter: colunas insuficientes.")
@@ -317,21 +444,21 @@ def plot_tradeoff_scatter(general_df: pd.DataFrame, output_dir: Path) -> None:
 
     fig, ax = plt.subplots(figsize=(8, 6))
 
-    x = pd.to_numeric(general_df["T_conv_98_seconds_mean"], errors="coerce")
-    y = pd.to_numeric(general_df["duty_std_after_conv_mean"], errors="coerce")
+    x = pd.to_numeric(general_df[x_col], errors="coerce")
+    y = pd.to_numeric(general_df[y_col], errors="coerce")
 
     ax.scatter(x, y)
 
     for _, row in general_df.iterrows():
-        ax.annotate(str(row["month"]), (row["T_conv_98_seconds_mean"], row["duty_std_after_conv_mean"]))
+        ax.annotate(str(row["month"]), (row[x_col], row[y_col]))
 
-    ax.set_title("Trade-off: tempo de convergencia vs estabilidade do duty")
-    ax.set_xlabel("Mean T_conv_98_seconds")
-    ax.set_ylabel("Mean duty_std_after_conv")
+    ax.set_title(title)
+    ax.set_xlabel(x_col)
+    ax.set_ylabel(y_col)
     ax.grid(True)
 
     fig.tight_layout()
-    fig.savefig(output_dir / "tradeoff_convergence_vs_duty_stability.png", dpi=300)
+    fig.savefig(output_dir / filename, dpi=300)
     plt.close(fig)
 
 
@@ -341,8 +468,8 @@ def main() -> None:
     parser.add_argument("--output-dir", default="graficos_uteis")
     parser.add_argument("--day-result-file", default="Apr_2023_results.txt")
     parser.add_argument("--target-date", type=int, default=20230415)
-    parser.add_argument("--voltage-scale", type=float, default=1.0)
-    parser.add_argument("--current-scale", type=float, default=1.0)
+    parser.add_argument("--voltage-scale", type=float, default=16.0)
+    parser.add_argument("--current-scale", type=float, default=128.0)
     args = parser.parse_args()
 
     results_dir = Path(args.results_dir).resolve()
@@ -351,6 +478,11 @@ def main() -> None:
     ensure_dir(output_dir)
 
     day_result_file = results_dir / args.day_result_file
+    daily_path = results_dir / "metrics_daily_all.csv"
+    daily_df = None
+
+    if daily_path.exists():
+        daily_df = read_daily_metrics(daily_path)
 
     if day_result_file.exists():
         plot_day_inputs_and_fuzzy(
@@ -359,12 +491,12 @@ def main() -> None:
             target_date=args.target_date,
             voltage_scale=args.voltage_scale,
             current_scale=args.current_scale,
+            daily_df=daily_df,
         )
     else:
         print(f"Arquivo nao encontrado para grafico diario: {day_result_file}")
 
     general_path = results_dir / "metrics_general.csv"
-    daily_path = results_dir / "metrics_daily_all.csv"
 
     if general_path.exists():
         general_df = read_general_metrics(general_path)
@@ -374,8 +506,7 @@ def main() -> None:
     else:
         print(f"Arquivo nao encontrado: {general_path}")
 
-    if daily_path.exists():
-        daily_df = read_daily_metrics(daily_path)
+    if daily_df is not None:
         plot_daily_metric_lines(daily_df, output_dir)
     else:
         print(f"Arquivo nao encontrado: {daily_path}")
