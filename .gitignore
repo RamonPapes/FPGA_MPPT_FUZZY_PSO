@@ -31,6 +31,7 @@ results/dados_pre_processados/
 # -------------------------------------
 # Logs e Relatórios
 # -------------------------------------
+*.log
 *.rpt
 *.summary
 *.done

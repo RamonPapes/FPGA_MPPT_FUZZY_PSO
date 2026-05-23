@@ -58,6 +58,15 @@ GENERAL_COLUMNS = ["month", "n_days"]
 for metric_col in SUMMARY_METRIC_COLUMNS:
     GENERAL_COLUMNS.extend([f"{metric_col}_mean", f"{metric_col}_std"])
 
+DAILY_TABLE_METRICS = [
+    "P_best_final",
+    "N_conv_98",
+    "T_conv_98_seconds",
+    "duty_std_after_conv",
+    "P_ripple_after_conv",
+    "mean_abs_error",
+]
+
 DUTY_STABLE_WINDOW = 200
 DUTY_STD_THRESHOLD = 1.0
 DUTY_STEP_THRESHOLD = 0.75
@@ -68,6 +77,21 @@ SENTINEL_NEGATIVE_COLUMNS = {
     "T_conv_98_seconds",
     "N_conv_duty_stable",
     "T_conv_duty_stable_seconds",
+}
+
+MONTH_ORDER = {
+    "Jan": 1,
+    "Feb": 2,
+    "Mar": 3,
+    "Apr": 4,
+    "May": 5,
+    "Jun": 6,
+    "Jul": 7,
+    "Aug": 8,
+    "Sep": 9,
+    "Oct": 10,
+    "Nov": 11,
+    "Dec": 12,
 }
 
 
@@ -81,6 +105,22 @@ def parse_month_name(path: Path) -> str:
         name = name[len("resultados_hybrid_") :]
 
     return name
+
+
+def month_sort_key(month: str) -> tuple[int, int, str]:
+    parts = month.split("_")
+
+    if len(parts) >= 2:
+        month_num = MONTH_ORDER.get(parts[0], 99)
+
+        try:
+            year = int(parts[1])
+        except ValueError:
+            year = 9999
+
+        return year, month_num, month
+
+    return 9999, 99, month
 
 
 def parse_hhmmss_to_seconds(value: object) -> int:
@@ -466,6 +506,41 @@ def summarize_month(month: str, daily_df: pd.DataFrame) -> dict[str, float | int
     return summary
 
 
+def write_daily_metric_tables(daily_df: pd.DataFrame, output_dir: Path) -> None:
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    table_df = daily_df.copy()
+    table_df["day"] = (
+        pd.to_numeric(table_df["timestamp_date"], errors="coerce").astype("Int64") % 100
+    )
+    table_df["month_order"] = table_df["month"].apply(month_sort_key)
+
+    month_order = (
+        table_df[["month", "month_order"]]
+        .drop_duplicates()
+        .sort_values("month_order")["month"]
+        .tolist()
+    )
+
+    day_columns = [f"dia_{day:02d}" for day in range(1, 32)]
+
+    for metric in DAILY_TABLE_METRICS:
+        pivot = table_df.pivot_table(
+            index="month",
+            columns="day",
+            values=metric,
+            aggfunc="mean",
+        )
+
+        pivot = pivot.reindex(month_order)
+        pivot = pivot.reindex(columns=range(1, 32))
+        pivot.columns = day_columns
+        pivot = pivot.reset_index()
+
+        output_path = output_dir / f"{metric}_por_dia.csv"
+        pivot.to_csv(output_path, index=False, float_format="%.6f")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--results-dir", default="results")
@@ -476,7 +551,10 @@ def main() -> None:
     if not results_dir.exists():
         raise FileNotFoundError(f"Pasta de resultados nao encontrada: {results_dir}")
 
-    result_files = sorted(results_dir.glob("*_results.txt"))
+    result_files = sorted(
+        results_dir.glob("*_results.txt"),
+        key=lambda path: month_sort_key(parse_month_name(path)),
+    )
 
     if not result_files:
         raise FileNotFoundError(f"Nenhum arquivo *_results.txt encontrado em: {results_dir}")
@@ -514,8 +592,12 @@ def main() -> None:
     general_path = results_dir / "metrics_general.csv"
     general_df.to_csv(general_path, index=False)
 
+    metric_tables_dir = results_dir / "tabelas_metricas_por_dia"
+    write_daily_metric_tables(all_daily_df, metric_tables_dir)
+
     print(f"Arquivo geral diario gerado: {all_daily_path}")
     print(f"Resumo geral gerado: {general_path}")
+    print(f"Tabelas por dia geradas em: {metric_tables_dir}")
 
 
 if __name__ == "__main__":
