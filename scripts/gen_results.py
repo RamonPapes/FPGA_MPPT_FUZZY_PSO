@@ -67,6 +67,45 @@ DAILY_TABLE_METRICS = [
     "mean_abs_error",
 ]
 
+DAILY_TABLE_LATEX = {
+    "P_best_final": {
+        "caption": "Valores diarios de $P_{\\text{best\\_final}}$ obtidos pelo controlador hibrido PSO--Fuzzy.",
+        "label": "tab:pbest-final-por-dia",
+        "header": "$P_{\\text{best\\_final}}$",
+        "decimals": 2,
+    },
+    "N_conv_98": {
+        "caption": "Valores diarios de $N_{\\text{conv\\_98}}$ obtidos pelo controlador hibrido PSO--Fuzzy.",
+        "label": "tab:nconv-98-por-dia",
+        "header": "$N_{\\text{conv\\_98}}$",
+        "decimals": 0,
+    },
+    "T_conv_98_seconds": {
+        "caption": "Valores diarios de $T_{\\text{conv\\_98}}$ obtidos pelo controlador hibrido PSO--Fuzzy.",
+        "label": "tab:tconv-98-por-dia",
+        "header": "$T_{\\text{conv\\_98}}$ (s)",
+        "decimals": 1,
+    },
+    "duty_std_after_conv": {
+        "caption": "Valores diarios de $duty_{\\text{std\\_after\\_conv}}$ obtidos pelo controlador hibrido PSO--Fuzzy.",
+        "label": "tab:duty-std-after-conv-por-dia",
+        "header": "$duty_{\\text{std\\_after\\_conv}}$",
+        "decimals": 3,
+    },
+    "P_ripple_after_conv": {
+        "caption": "Valores diarios de $P_{\\text{ripple\\_after\\_conv}}$ obtidos pelo controlador hibrido PSO--Fuzzy.",
+        "label": "tab:p-ripple-after-conv-por-dia",
+        "header": "$P_{\\text{ripple\\_after\\_conv}}$",
+        "decimals": 2,
+    },
+    "mean_abs_error": {
+        "caption": "Valores diarios de $mean_{\\text{abs\\_error}}$ obtidos pelo controlador hibrido PSO--Fuzzy.",
+        "label": "tab:mean-abs-error-por-dia",
+        "header": "$mean_{\\text{abs\\_error}}$",
+        "decimals": 3,
+    },
+}
+
 DUTY_STABLE_WINDOW = 200
 DUTY_STD_THRESHOLD = 1.0
 DUTY_STEP_THRESHOLD = 0.75
@@ -506,6 +545,66 @@ def summarize_month(month: str, daily_df: pd.DataFrame) -> dict[str, float | int
     return summary
 
 
+def format_month_label(month: str) -> str:
+    parts = month.split("_")
+
+    if len(parts) >= 2:
+        return f"{parts[0]}/{parts[1]}"
+
+    return month
+
+
+def format_latex_value(value: object, decimals: int, metric: str) -> str:
+    if pd.isna(value):
+        return ""
+
+    numeric_value = float(value)
+
+    if metric in SENTINEL_NEGATIVE_COLUMNS and numeric_value < 0:
+        return ""
+
+    return f"{numeric_value:.{decimals}f}"
+
+
+def write_daily_metric_latex_table(pivot: pd.DataFrame, metric: str, output_path: Path) -> None:
+    info = DAILY_TABLE_LATEX[metric]
+    decimals = int(info["decimals"])
+    day_cols = [f"dia_{day:02d}" for day in range(1, 32)]
+    column_format = "l" + ("c" * len(day_cols))
+
+    lines = [
+        "\\begin{table}[H]",
+        "\\centering",
+        f"\\caption{{{info['caption']}}}",
+        f"\\label{{{info['label']}}}",
+        "\\resizebox{\\textwidth}{!}{%",
+        f"\\begin{{tabular}}{{{column_format}}}",
+        "\\hline",
+    ]
+
+    header = ["\\textbf{M\\^es/Ano}"] + [f"\\textbf{{{day:02d}}}" for day in range(1, 32)]
+    lines.append(" & ".join(header) + " \\\\")
+    lines.append("\\hline")
+
+    for _, row in pivot.iterrows():
+        row_values = [format_month_label(str(row["month"]))]
+
+        for day_col in day_cols:
+            row_values.append(format_latex_value(row[day_col], decimals, metric))
+
+        lines.append(" & ".join(row_values) + " \\\\")
+
+    lines.extend([
+        "\\hline",
+        "\\end{tabular}%",
+        "}",
+        "\\end{table}",
+        "",
+    ])
+
+    output_path.write_text("\n".join(lines), encoding="utf-8")
+
+
 def write_daily_metric_tables(daily_df: pd.DataFrame, output_dir: Path) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -539,6 +638,9 @@ def write_daily_metric_tables(daily_df: pd.DataFrame, output_dir: Path) -> None:
 
         output_path = output_dir / f"{metric}_por_dia.csv"
         pivot.to_csv(output_path, index=False, float_format="%.6f")
+
+        latex_path = output_dir / f"{metric}_por_dia.tex"
+        write_daily_metric_latex_table(pivot, metric, latex_path)
 
 
 def main() -> None:
