@@ -37,6 +37,7 @@ def read_result_file(path: Path) -> pd.DataFrame:
         "current",
         "power_now",
         "duty",
+        "control_duty",
         "error",
         "delta_e",
     }
@@ -49,7 +50,6 @@ def read_result_file(path: Path) -> pd.DataFrame:
     optional_numeric = {
         "gbest_duty",
         "gbest_power",
-        "control_duty",
         "fuzzy_delta",
         "POWER_SCALE_DEN",
     }
@@ -175,7 +175,13 @@ def plot_day_inputs_and_fuzzy(
     fig.savefig(output_path, dpi=300)
     plt.close(fig)
 
-    duty_col = "control_duty" if "control_duty" in day_df.columns else "duty"
+    if "control_duty" not in day_df.columns:
+        raise ValueError(
+            "Coluna control_duty ausente. Regenere os resultados com o testbench atual; "
+            "a coluna duty representa a particula do PSO e nao deve ser usada no grafico principal."
+        )
+
+    duty_col = "control_duty"
     duty_title_day = str(target_date)[-2:]
 
     fig, ax = plt.subplots(figsize=(9, 5))

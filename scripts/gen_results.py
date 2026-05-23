@@ -133,6 +133,7 @@ def read_result_file(path: Path) -> pd.DataFrame:
         "timestamp_time",
         "power_now",
         "duty",
+        "control_duty",
         "error",
     }
 
@@ -153,7 +154,6 @@ def read_result_file(path: Path) -> pd.DataFrame:
     ]
 
     optional_numeric_cols = [
-        "control_duty",
         "delta_e",
         "fuzzy_delta",
         "gbest_duty",
@@ -191,7 +191,13 @@ def read_result_file(path: Path) -> pd.DataFrame:
 
 
 def duty_metric_col(day_df: pd.DataFrame) -> str:
-    return "control_duty" if "control_duty" in day_df.columns else "duty"
+    if "control_duty" not in day_df.columns:
+        raise ValueError(
+            "Coluna control_duty ausente. Regenere os resultados com o testbench atual; "
+            "a coluna duty representa a particula do PSO e nao deve ser usada nas metricas."
+        )
+
+    return "control_duty"
 
 
 def find_duty_stable_point(day_df: pd.DataFrame, duty_col: str) -> tuple[pd.Series | None, int]:
