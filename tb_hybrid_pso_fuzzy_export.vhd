@@ -29,7 +29,12 @@ entity tb_hybrid_pso_fuzzy_export is
         DELTA_V_MIN_G_TB     : integer := 16;
         DUTY_DIRECTION_G_TB  : integer := -1;
         SEARCH_CENTER_MODE_G_TB : integer := 1;
-        RESET_ON_DATE_CHANGE_G_TB : integer := 1
+        RESET_ON_DATE_CHANGE_G_TB : integer := 0;
+        MEMORY_HALF_LIFE_G_TB : integer := 300;
+        MAX_PBEST_AGE_G_TB : integer := 500;
+        ENABLE_CHANGE_DETECTION_G_TB : integer := 0;
+        DROP_THRESHOLD_PERCENT_G_TB : integer := 70;
+        DROP_PATIENCE_G_TB : integer := 30
     );
 end tb_hybrid_pso_fuzzy_export;
 
@@ -88,7 +93,12 @@ begin
             ERROR_GAIN_G      => ERROR_GAIN_G_TB,
             DELTA_V_MIN_G     => DELTA_V_MIN_G_TB,
             DUTY_DIRECTION_G  => DUTY_DIRECTION_G_TB,
-            SEARCH_CENTER_MODE_G => SEARCH_CENTER_MODE_G_TB
+            SEARCH_CENTER_MODE_G => SEARCH_CENTER_MODE_G_TB,
+            MEMORY_HALF_LIFE_G => MEMORY_HALF_LIFE_G_TB,
+            MAX_PBEST_AGE_G => MAX_PBEST_AGE_G_TB,
+            ENABLE_CHANGE_DETECTION_G => ENABLE_CHANGE_DETECTION_G_TB,
+            DROP_THRESHOLD_PERCENT_G => DROP_THRESHOLD_PERCENT_G_TB,
+            DROP_PATIENCE_G => DROP_PATIENCE_G_TB
         )
         port map (
             clk             => clk,
@@ -148,7 +158,8 @@ begin
         wait until rising_edge(clk);
 
         write(out_line, string'("sample timestamp_date timestamp_time voltage current power_now duty control_duty gbest_duty gbest_power error delta_e fuzzy_delta "));
-        write(out_line, string'("W_PSO C1_PSO C2_PSO RHO_MIN RHO_MAX VEL_MIN VEL_MAX DEADZONE SEARCH_RADIUS FOKKER_STEP_MIN FOKKER_STEP_MAX FUZZY_STEP FUZZY_EDGE POWER_SCALE_DEN ERROR_GAIN DELTA_V_MIN"));
+        write(out_line, string'("W_PSO C1_PSO C2_PSO RHO_MIN RHO_MAX VEL_MIN VEL_MAX DEADZONE SEARCH_RADIUS FOKKER_STEP_MIN FOKKER_STEP_MAX FUZZY_STEP FUZZY_EDGE POWER_SCALE_DEN ERROR_GAIN DELTA_V_MIN "));
+        write(out_line, string'("MEMORY_HALF_LIFE MAX_PBEST_AGE ENABLE_CHANGE_DETECTION DROP_THRESHOLD_PERCENT DROP_PATIENCE RESET_ON_DATE_CHANGE"));
         writeline(result_file, out_line);
 
         while not endfile(data_file) loop
@@ -275,6 +286,24 @@ begin
             write(out_line, string'(" "));
 
             write(out_line, DELTA_V_MIN_G_TB);
+            write(out_line, string'(" "));
+
+            write(out_line, MEMORY_HALF_LIFE_G_TB);
+            write(out_line, string'(" "));
+
+            write(out_line, MAX_PBEST_AGE_G_TB);
+            write(out_line, string'(" "));
+
+            write(out_line, ENABLE_CHANGE_DETECTION_G_TB);
+            write(out_line, string'(" "));
+
+            write(out_line, DROP_THRESHOLD_PERCENT_G_TB);
+            write(out_line, string'(" "));
+
+            write(out_line, DROP_PATIENCE_G_TB);
+            write(out_line, string'(" "));
+
+            write(out_line, RESET_ON_DATE_CHANGE_G_TB);
 
             writeline(result_file, out_line);
 

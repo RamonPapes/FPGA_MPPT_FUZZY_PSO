@@ -50,7 +50,12 @@ param(
     [int]$DELTA_V_MIN_G_TB = 16,
     [int]$DUTY_DIRECTION_G_TB = 1,
     [int]$SEARCH_CENTER_MODE_G_TB = 2,
-    [int]$RESET_ON_DATE_CHANGE_G_TB = 1
+    [int]$RESET_ON_DATE_CHANGE_G_TB = 0,
+    [int]$MEMORY_HALF_LIFE_G_TB = 300,
+    [int]$MAX_PBEST_AGE_G_TB = 500,
+    [int]$ENABLE_CHANGE_DETECTION_G_TB = 0,
+    [int]$DROP_THRESHOLD_PERCENT_G_TB = 70,
+    [int]$DROP_PATIENCE_G_TB = 30
 )
 
 $ErrorActionPreference = "Stop"
@@ -113,7 +118,12 @@ $TunableGenericKeys = @(
     "DELTA_V_MIN_G_TB",
     "DUTY_DIRECTION_G_TB",
     "SEARCH_CENTER_MODE_G_TB",
-    "RESET_ON_DATE_CHANGE_G_TB"
+    "RESET_ON_DATE_CHANGE_G_TB",
+    "MEMORY_HALF_LIFE_G_TB",
+    "MAX_PBEST_AGE_G_TB",
+    "ENABLE_CHANGE_DETECTION_G_TB",
+    "DROP_THRESHOLD_PERCENT_G_TB",
+    "DROP_PATIENCE_G_TB"
 )
 
 $ProjectRoot = (Resolve-Path $ProjectRoot).Path
@@ -193,6 +203,8 @@ try {
     Write-Host "DUTY_DIRECTION=$DUTY_DIRECTION_G_TB POWER_SCALE_DEN=$POWER_SCALE_DEN_G_TB"
     Write-Host "ERROR_GAIN=$ERROR_GAIN_G_TB DELTA_V_MIN=$DELTA_V_MIN_G_TB"
     Write-Host "RESET_ON_DATE_CHANGE=$RESET_ON_DATE_CHANGE_G_TB"
+    Write-Host "MEMORY_HALF_LIFE=$MEMORY_HALF_LIFE_G_TB MAX_PBEST_AGE=$MAX_PBEST_AGE_G_TB"
+    Write-Host "ENABLE_CHANGE_DETECTION=$ENABLE_CHANGE_DETECTION_G_TB DROP_THRESHOLD_PERCENT=$DROP_THRESHOLD_PERCENT_G_TB DROP_PATIENCE=$DROP_PATIENCE_G_TB"
     Write-Host "CURRENT_FORMAT=$CurrentFormat CURRENT_BASE_AMPS=$CurrentBaseAmps CURRENT_Q15_SCALE=$CurrentQ15Scale"
 
     Write-Host ""
@@ -304,6 +316,8 @@ try {
         Write-Host "DUTY_DIRECTION=$DUTY_DIRECTION_G_TB POWER_SCALE_DEN=$POWER_SCALE_DEN_G_TB"
         Write-Host "ERROR_GAIN=$ERROR_GAIN_G_TB DELTA_V_MIN=$DELTA_V_MIN_G_TB"
         Write-Host "RESET_ON_DATE_CHANGE=$RESET_ON_DATE_CHANGE_G_TB"
+        Write-Host "MEMORY_HALF_LIFE=$MEMORY_HALF_LIFE_G_TB MAX_PBEST_AGE=$MAX_PBEST_AGE_G_TB"
+        Write-Host "ENABLE_CHANGE_DETECTION=$ENABLE_CHANGE_DETECTION_G_TB DROP_THRESHOLD_PERCENT=$DROP_THRESHOLD_PERCENT_G_TB DROP_PATIENCE=$DROP_PATIENCE_G_TB"
     }
     else {
         Write-Host ""
@@ -394,7 +408,12 @@ try {
                 $DELTA_V_MIN_G_TB_Job,
                 $DUTY_DIRECTION_G_TB_Job,
                 $SEARCH_CENTER_MODE_G_TB_Job,
-                $RESET_ON_DATE_CHANGE_G_TB_Job
+                $RESET_ON_DATE_CHANGE_G_TB_Job,
+                $MEMORY_HALF_LIFE_G_TB_Job,
+                $MAX_PBEST_AGE_G_TB_Job,
+                $ENABLE_CHANGE_DETECTION_G_TB_Job,
+                $DROP_THRESHOLD_PERCENT_G_TB_Job,
+                $DROP_PATIENCE_G_TB_Job
             )
 
             Set-Location $ProjectRootJob
@@ -426,6 +445,11 @@ try {
                     "-gDUTY_DIRECTION_G_TB=$DUTY_DIRECTION_G_TB_Job" `
                     "-gSEARCH_CENTER_MODE_G_TB=$SEARCH_CENTER_MODE_G_TB_Job" `
                     "-gRESET_ON_DATE_CHANGE_G_TB=$RESET_ON_DATE_CHANGE_G_TB_Job" `
+                    "-gMEMORY_HALF_LIFE_G_TB=$MEMORY_HALF_LIFE_G_TB_Job" `
+                    "-gMAX_PBEST_AGE_G_TB=$MAX_PBEST_AGE_G_TB_Job" `
+                    "-gENABLE_CHANGE_DETECTION_G_TB=$ENABLE_CHANGE_DETECTION_G_TB_Job" `
+                    "-gDROP_THRESHOLD_PERCENT_G_TB=$DROP_THRESHOLD_PERCENT_G_TB_Job" `
+                    "-gDROP_PATIENCE_G_TB=$DROP_PATIENCE_G_TB_Job" `
                     -do "run -all; quit -f" *> $null
 
                 $ExitCode = $LASTEXITCODE
@@ -499,7 +523,12 @@ try {
             $DELTA_V_MIN_G_TB, `
             $DUTY_DIRECTION_G_TB, `
             $SEARCH_CENTER_MODE_G_TB, `
-            $RESET_ON_DATE_CHANGE_G_TB
+            $RESET_ON_DATE_CHANGE_G_TB, `
+            $MEMORY_HALF_LIFE_G_TB, `
+            $MAX_PBEST_AGE_G_TB, `
+            $ENABLE_CHANGE_DETECTION_G_TB, `
+            $DROP_THRESHOLD_PERCENT_G_TB, `
+            $DROP_PATIENCE_G_TB
 
         $Jobs += $Job
     }

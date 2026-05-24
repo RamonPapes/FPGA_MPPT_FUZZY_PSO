@@ -41,6 +41,10 @@ STAGE1_PARAM_RANGES = {
 
     # Hipotese de direcao do duty
     "DUTY_DIRECTION_G_TB": [-1, 1],
+
+    # Memoria adaptativa do PSO. Nao reseta por dia; o gbest decai com o tempo.
+    "MEMORY_HALF_LIFE_G_TB": [150, 300, 600, 900],
+    "MAX_PBEST_AGE_G_TB": [250, 500, 1000],
 }
 
 # Fixos na rodada 1.
@@ -56,7 +60,10 @@ STAGE1_FIXED_PARAMS = {
     "POWER_SCALE_DEN_G_TB": 65536,
     "ERROR_GAIN_G_TB": 1,
     "DELTA_V_MIN_G_TB": 16,
-    "RESET_ON_DATE_CHANGE_G_TB": 1,
+    "RESET_ON_DATE_CHANGE_G_TB": 0,
+    "ENABLE_CHANGE_DETECTION_G_TB": 0,
+    "DROP_THRESHOLD_PERCENT_G_TB": 70,
+    "DROP_PATIENCE_G_TB": 30,
 }
 
 # Rodada 2: refinamento.
@@ -68,6 +75,11 @@ STAGE2_PARAM_RANGES = {
     "VEL_MAX_G_TB": [10, 20, 30],
     "RHO_MIN_G_TB": [50, 53, 55],
     "RHO_MAX_G_TB": [56, 60, 65],
+    "MEMORY_HALF_LIFE_G_TB": [200, 300, 450, 600, 900],
+    "MAX_PBEST_AGE_G_TB": [250, 500, 750, 1000],
+    "ENABLE_CHANGE_DETECTION_G_TB": [0, 1],
+    "DROP_THRESHOLD_PERCENT_G_TB": [60, 70, 80],
+    "DROP_PATIENCE_G_TB": [20, 30, 60],
 }
 
 ALL_GENERIC_KEYS = sorted(
@@ -394,6 +406,12 @@ def save_ranked_results(df: pd.DataFrame, out_dir: Path, prefix: str, top_n: int
         "VEL_MAX_G_TB",
         "RHO_MIN_G_TB",
         "RHO_MAX_G_TB",
+        "MEMORY_HALF_LIFE_G_TB",
+        "MAX_PBEST_AGE_G_TB",
+        "ENABLE_CHANGE_DETECTION_G_TB",
+        "DROP_THRESHOLD_PERCENT_G_TB",
+        "DROP_PATIENCE_G_TB",
+        "RESET_ON_DATE_CHANGE_G_TB",
         "duty_final_std_mean",
         "duty_final_range_mean",
         "duty_std_mean",

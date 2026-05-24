@@ -24,7 +24,12 @@ entity hybrid_pso_fuzzy_mppt is
         ERROR_GAIN_G      : integer := 1;
         DELTA_V_MIN_G     : integer := 16;
         DUTY_DIRECTION_G  : integer := -1;
-        SEARCH_CENTER_MODE_G : integer := 1
+        SEARCH_CENTER_MODE_G : integer := 1;
+        MEMORY_HALF_LIFE_G : integer := 300;
+        MAX_PBEST_AGE_G : integer := 500;
+        ENABLE_CHANGE_DETECTION_G : integer := 0;
+        DROP_THRESHOLD_PERCENT_G : integer := 70;
+        DROP_PATIENCE_G : integer := 30
     );
     port (
         clk              : in  std_logic;
@@ -85,6 +90,7 @@ architecture Structural of hybrid_pso_fuzzy_mppt is
     signal particle_vel      : particle_array := INIT_VEL;
     signal pbest_pos         : particle_array := INIT_POS;
     signal pbest_power       : particle_array := (others => 0);
+    signal pbest_age         : particle_array := (others => 0);
 
     signal next_particle_pos : particle_array := INIT_POS;
     signal next_particle_vel : particle_array := INIT_VEL;
@@ -94,6 +100,7 @@ architecture Structural of hybrid_pso_fuzzy_mppt is
 
     signal gbest_pos         : integer := 50;
     signal gbest_power       : integer := 0;
+    signal drop_counter      : integer := 0;
 
     signal current_idx       : integer range 0 to N_PARTICLES - 1 := 0;
     signal wait_counter      : integer := 0;
@@ -201,19 +208,29 @@ begin
     end generate;
 
     process(clk, reset)
-        variable lfsr_var : unsigned(15 downto 0);
+        variable lfsr_var             : unsigned(15 downto 0);
+        variable lambda_num           : integer;
+        variable power_for_best       : integer;
+        variable aged_pbest           : integer;
+        variable updated_pbest_power  : integer;
+        variable updated_pbest_pos    : integer;
+        variable updated_pbest_age    : integer;
+        variable best_power_next      : integer;
+        variable best_pos_next        : integer;
     begin
         if reset = '1' then
             particle_pos <= INIT_POS;
             particle_vel <= INIT_VEL;
             pbest_pos    <= INIT_POS;
             pbest_power  <= (others => 0);
+            pbest_age    <= (others => 0);
 
             rho1_arr     <= (others => 53);
             rho2_arr     <= (others => 53);
 
             gbest_pos    <= 50;
             gbest_power  <= 0;
+            drop_counter <= 0;
 
             current_idx  <= 0;
             wait_counter <= 0;
@@ -270,14 +287,74 @@ begin
                         fokker_step <= ffp_step_sig;
                         pno_candidate <= refined_duty_sig;
 
-                        if power_now_sig > pbest_power(current_idx) then
-                            pbest_power(current_idx) <= power_now_sig;
-                            pbest_pos(current_idx) <= duty_reg;
+                        if MEMORY_HALF_LIFE_G <= 0 then
+                            lambda_num := 10000;
+                        else
+                            lambda_num := 10000 - ((693 * 10000) / (MEMORY_HALF_LIFE_G * 1000));
                         end if;
 
-                        if power_now_sig > gbest_power then
-                            gbest_power <= power_now_sig;
-                            gbest_pos <= duty_reg;
+                        lambda_num := clamp(lambda_num, 0, 10000);
+
+                        if power_now_sig < 0 then
+                            power_for_best := 0;
+                        else
+                            power_for_best := power_now_sig;
+                        end if;
+
+                        best_power_next := 0;
+                        best_pos_next := pbest_pos(0);
+
+                        for i in 0 to N_PARTICLES - 1 loop
+                            aged_pbest := (pbest_power(i) * lambda_num) / 10000;
+                            updated_pbest_power := aged_pbest;
+                            updated_pbest_pos := pbest_pos(i);
+                            updated_pbest_age := pbest_age(i) + 1;
+
+                            if i = current_idx then
+                                if power_for_best > aged_pbest or
+                                   pbest_age(i) >= MAX_PBEST_AGE_G then
+                                    updated_pbest_power := power_for_best;
+                                    updated_pbest_pos := duty_reg;
+                                    updated_pbest_age := 0;
+                                end if;
+                            end if;
+
+                            pbest_power(i) <= updated_pbest_power;
+                            pbest_pos(i) <= updated_pbest_pos;
+                            pbest_age(i) <= updated_pbest_age;
+
+                            if i = 0 or updated_pbest_power > best_power_next then
+                                best_power_next := updated_pbest_power;
+                                best_pos_next := updated_pbest_pos;
+                            end if;
+                        end loop;
+
+                        if ENABLE_CHANGE_DETECTION_G /= 0 then
+                            if best_power_next > 0 and
+                               (power_for_best * 100) <
+                               (best_power_next * DROP_THRESHOLD_PERCENT_G) then
+
+                                if drop_counter >= DROP_PATIENCE_G - 1 then
+                                    pbest_power <= (others => power_for_best);
+                                    pbest_pos <= particle_pos;
+                                    pbest_age <= (others => 0);
+                                    gbest_power <= power_for_best;
+                                    gbest_pos <= duty_reg;
+                                    drop_counter <= 0;
+                                else
+                                    gbest_power <= best_power_next;
+                                    gbest_pos <= best_pos_next;
+                                    drop_counter <= drop_counter + 1;
+                                end if;
+                            else
+                                gbest_power <= best_power_next;
+                                gbest_pos <= best_pos_next;
+                                drop_counter <= 0;
+                            end if;
+                        else
+                            gbest_power <= best_power_next;
+                            gbest_pos <= best_pos_next;
+                            drop_counter <= 0;
                         end if;
 
                         prev_power <= power_now_sig;

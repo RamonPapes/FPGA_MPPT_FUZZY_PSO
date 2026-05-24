@@ -252,7 +252,9 @@ def read_result_file(path: Path) -> pd.DataFrame:
     df["timestamp_date"] = df["timestamp_date"].astype(int)
     df["timestamp_seconds"] = df["timestamp_time"].apply(parse_hhmmss_to_seconds)
 
-    if "gbest_power" in df.columns:
+    adaptive_gbest = "MEMORY_HALF_LIFE" in df.columns
+
+    if "gbest_power" in df.columns and not adaptive_gbest:
         df["expected_gbest_power"] = (
             df.groupby("timestamp_date")["power_now"].cummax()
         )
@@ -263,6 +265,9 @@ def read_result_file(path: Path) -> pd.DataFrame:
             df.groupby("timestamp_date")["gbest_power"].diff().fillna(0) < 0
         ).astype(int)
     else:
+        # Com memoria adaptativa, gbest pode cair quando a potencia disponivel
+        # cai. Isso nao e violacao; e o comportamento desejado para nao prender
+        # o PSO em um pico antigo do dataset.
         df["gbest_consistency_violation"] = 0
         df["gbest_monotonic_violation"] = 0
 
