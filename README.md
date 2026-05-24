@@ -26,7 +26,7 @@ Relatorio em desenvolvimento: [Overleaf](https://www.overleaf.com/read/cqjckrcsc
 
 ## Como Rodar
 
-Experimento completo, incluindo pre-processamento, otimizacao, simulacao, metricas, graficos e analise de erro:
+Experimento completo (pre-processamento, otimizacao, simulacao, metricas, graficos e analise de erro):
 
 ```powershell
 .\run_experiment.ps1 -ArchiveDir archive_final -ResultsDir results_final -CleanWork
