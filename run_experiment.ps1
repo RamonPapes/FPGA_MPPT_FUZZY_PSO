@@ -16,7 +16,7 @@ param(
     [double]$CurrentQ15Scale = 32767.0,
     [string]$PlotDayResultFile = "Apr_2023_results.txt",
     [int]$PlotTargetDate = 20230415,
-    [int]$MaxParallel = 4,
+    [int]$MaxParallel = 1,
     [string]$OptimizationDir = "optimization_runs",
     [string]$OptimizationDataset = "",
     [ValidateSet("stage1", "stage2", "both")]
@@ -325,7 +325,14 @@ try {
     }
 
     Write-Host ""
-    Write-Host "=== Rodando simulacoes em paralelo: $MaxParallel por vez ==="
+    if ($MaxParallel -eq 1) {
+        Write-Host "=== Rodando simulacoes sequencialmente ==="
+    }
+    else {
+        Write-Host "=== Rodando simulacoes em paralelo: $MaxParallel por vez ==="
+        Write-Host "Aviso: licencas uncounted node-locked do Questa/ModelSim normalmente permitem apenas uma sessao por vez."
+        Write-Host "Se aparecer erro de checkout de licenca, rode novamente com -MaxParallel 1."
+    }
 
     $Jobs = @()
     $Failures = @()

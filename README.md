@@ -38,6 +38,8 @@ Para pular a otimizacao e usar os parametros atuais:
 .\run_experiment.ps1 -ArchiveDir archive_final -ResultsDir results_final -CleanWork -SkipOptimization
 ```
 
+Por padrao, as simulacoes rodam sequencialmente (`-MaxParallel 1`). Isso evita erro de checkout em licencas Questa/ModelSim Starter uncounted node-locked, que normalmente permitem apenas uma sessao por vez. Use `-MaxParallel` maior que 1 apenas se a sua licenca permitir multiplas sessoes simultaneas.
+
 Para recalcular apenas metricas e tabelas a partir dos resultados ja simulados:
 
 ```powershell
