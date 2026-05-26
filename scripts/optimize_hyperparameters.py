@@ -23,6 +23,7 @@ VHDL_FILES = [
     "rlt/pso_swarm_update_unit.vhd",
     "rlt/pso_best_tracker_unit.vhd",
     "rlt/hybrid_pso_fuzzy_mppt.vhd",
+    "rlt/mppt_top.vhd",
     "rlt/tb_hybrid_pso_fuzzy_export.vhd",
 ]
 

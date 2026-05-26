@@ -72,7 +72,7 @@ architecture sim of tb_hybrid_pso_fuzzy_export is
 
 begin
 
-    uut: entity work.hybrid_pso_fuzzy_mppt
+    uut: entity work.mppt_top
         generic map (
             SETTLE_CYCLES     => SETTLE_CYCLES_G,
 

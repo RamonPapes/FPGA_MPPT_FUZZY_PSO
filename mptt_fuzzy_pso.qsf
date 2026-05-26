@@ -39,7 +39,7 @@
 
 set_global_assignment -name FAMILY "Cyclone V"
 set_global_assignment -name DEVICE 5CEBA4F23C7
-set_global_assignment -name TOP_LEVEL_ENTITY hybrid_pso_fuzzy_mppt
+set_global_assignment -name TOP_LEVEL_ENTITY mppt_top
 set_global_assignment -name ORIGINAL_QUARTUS_VERSION 25.1STD.0
 set_global_assignment -name PROJECT_CREATION_TIME_DATE "16:34:16  MAY 02, 2026"
 set_global_assignment -name LAST_QUARTUS_VERSION "25.1std.0 Lite Edition"
@@ -64,6 +64,7 @@ set_global_assignment -name VHDL_FILE rlt/pso_particle_update_unit.vhd
 set_global_assignment -name VHDL_FILE rlt/pso_swarm_update_unit.vhd
 set_global_assignment -name VHDL_FILE rlt/pso_best_tracker_unit.vhd
 set_global_assignment -name VHDL_FILE rlt/hybrid_pso_fuzzy_mppt.vhd
+set_global_assignment -name VHDL_FILE rlt/mppt_top.vhd
 set_global_assignment -name PARTITION_NETLIST_TYPE SOURCE -section_id Top
 set_global_assignment -name PARTITION_FITTER_PRESERVATION_LEVEL PLACEMENT_AND_ROUTING -section_id Top
 set_global_assignment -name PARTITION_COLOR 16764057 -section_id Top

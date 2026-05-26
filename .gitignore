@@ -27,7 +27,7 @@ results/graficos_uteis/
 .venv/
 dados_pre_processados/
 results/dados_pre_processados/
-
+*.pyc
 # -------------------------------------
 # Logs e Relatórios
 # -------------------------------------

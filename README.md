@@ -16,7 +16,8 @@ Relatorio em desenvolvimento: [Overleaf](https://www.overleaf.com/read/cqjckrcsc
 - `rlt/pso_particle_update_unit.vhd`: atualiza posicao e velocidade de uma particula.
 - `rlt/pso_swarm_update_unit.vhd`: instancia a atualizacao paralela das particulas.
 - `rlt/pso_best_tracker_unit.vhd`: atualiza `pbest`, `gbest` e a deteccao de queda de potencia.
-- `rlt/hybrid_pso_fuzzy_mppt.vhd`: modulo principal do controlador hibrido.
+- `rlt/hybrid_pso_fuzzy_mppt.vhd`: nucleo do controlador hibrido.
+- `rlt/mppt_top.vhd`: top-level sintetizavel do projeto.
 - `rlt/tb_hybrid_pso_fuzzy_export.vhd`: testbench que le os dados e exporta resultados.
 - `run_experiment.ps1`: script principal de reproducao dos experimentos.
 

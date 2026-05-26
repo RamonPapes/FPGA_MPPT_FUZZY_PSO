@@ -145,6 +145,7 @@ $VhdlFiles = @(
     "pso_swarm_update_unit.vhd",
     "pso_best_tracker_unit.vhd",
     "hybrid_pso_fuzzy_mppt.vhd",
+    "mppt_top.vhd",
     "tb_hybrid_pso_fuzzy_export.vhd"
 )
 
