@@ -53,14 +53,6 @@ end hybrid_pso_fuzzy_mppt;
 
 architecture Structural of hybrid_pso_fuzzy_mppt is
 
-    type top_state_type is (
-        APPLY_PARTICLE,
-        WAIT_SETTLE,
-        SAMPLE_AND_UPDATE,
-        PREPARE_SWARM,
-        UPDATE_SWARM
-    );
-
     function init_particle_positions return particle_array is
         variable arr  : particle_array;
         variable seed : unsigned(15 downto 0) := x"ACE1";
@@ -95,8 +87,17 @@ architecture Structural of hybrid_pso_fuzzy_mppt is
     signal next_particle_pos : particle_array := INIT_POS;
     signal next_particle_vel : particle_array := INIT_VEL;
 
+    signal next_pbest_pos    : particle_array := INIT_POS;
+    signal next_pbest_power  : particle_array := (others => 0);
+    signal next_pbest_age    : particle_array := (others => 0);
+    signal next_gbest_pos    : integer := 50;
+    signal next_gbest_power  : integer := 0;
+    signal next_drop_counter : integer := 0;
+
     signal rho1_arr          : particle_array := (others => 53);
     signal rho2_arr          : particle_array := (others => 53);
+    signal next_rho1_arr     : particle_array := (others => 53);
+    signal next_rho2_arr     : particle_array := (others => 53);
 
     signal gbest_pos         : integer := 50;
     signal gbest_power       : integer := 0;
@@ -133,13 +134,21 @@ architecture Structural of hybrid_pso_fuzzy_mppt is
     signal search_high       : integer := 62;
 
     signal lfsr              : unsigned(15 downto 0) := x"ACE1";
+    signal next_lfsr_sig     : unsigned(15 downto 0) := x"ACE1";
 
-    signal state             : top_state_type := APPLY_PARTICLE;
+    signal state             : state_type := APPLY_PARTICLE;
 
 begin
 
-    search_low  <= clamp(search_center - SEARCH_RADIUS_G, DUTY_MIN, DUTY_MAX);
-    search_high <= clamp(search_center + SEARCH_RADIUS_G, DUTY_MIN, DUTY_MAX);
+    u_search_window: entity work.pso_search_window_unit
+        generic map (
+            SEARCH_RADIUS_G => SEARCH_RADIUS_G
+        )
+        port map (
+            search_center_in => search_center,
+            search_low_out   => search_low,
+            search_high_out  => search_high
+        );
 
     u_measurement: entity work.mppt_measurement_unit
         generic map (
@@ -183,40 +192,67 @@ begin
             refined_duty  => refined_duty_sig
         );
 
-    gen_particle_update: for i in 0 to N_PARTICLES - 1 generate
-        u_particle_update: entity work.pso_particle_update_unit
-            generic map (
-                W_PSO_G   => W_PSO_G,
-                C1_PSO_G  => C1_PSO_G,
-                C2_PSO_G  => C2_PSO_G,
-                VEL_MIN_G => VEL_MIN_G,
-                VEL_MAX_G => VEL_MAX_G
-            )
-            port map (
-                particle_pos_in  => particle_pos(i),
-                particle_vel_in  => particle_vel(i),
-                pbest_pos_in     => pbest_pos(i),
-                gbest_pos_in     => gbest_pos,
-                rho1_in          => rho1_arr(i),
-                rho2_in          => rho2_arr(i),
-                search_low_in    => search_low,
-                search_high_in   => search_high,
+    u_swarm_update: entity work.pso_swarm_update_unit
+        generic map (
+            W_PSO_G   => W_PSO_G,
+            C1_PSO_G  => C1_PSO_G,
+            C2_PSO_G  => C2_PSO_G,
+            VEL_MIN_G => VEL_MIN_G,
+            VEL_MAX_G => VEL_MAX_G
+        )
+        port map (
+            particle_pos_in  => particle_pos,
+            particle_vel_in  => particle_vel,
+            pbest_pos_in     => pbest_pos,
+            gbest_pos_in     => gbest_pos,
+            rho1_arr_in      => rho1_arr,
+            rho2_arr_in      => rho2_arr,
+            search_low_in    => search_low,
+            search_high_in   => search_high,
 
-                particle_pos_out => next_particle_pos(i),
-                particle_vel_out => next_particle_vel(i)
-            );
-    end generate;
+            particle_pos_out => next_particle_pos,
+            particle_vel_out => next_particle_vel
+        );
+
+    u_best_tracker: entity work.pso_best_tracker_unit
+        generic map (
+            MEMORY_HALF_LIFE_G          => MEMORY_HALF_LIFE_G,
+            MAX_PBEST_AGE_G             => MAX_PBEST_AGE_G,
+            ENABLE_CHANGE_DETECTION_G   => ENABLE_CHANGE_DETECTION_G,
+            DROP_THRESHOLD_PERCENT_G    => DROP_THRESHOLD_PERCENT_G,
+            DROP_PATIENCE_G             => DROP_PATIENCE_G
+        )
+        port map (
+            current_idx_in      => current_idx,
+            duty_in             => duty_reg,
+            power_now_in        => power_now_sig,
+            particle_pos_in     => particle_pos,
+            pbest_pos_in        => pbest_pos,
+            pbest_power_in      => pbest_power,
+            pbest_age_in        => pbest_age,
+            drop_counter_in     => drop_counter,
+
+            pbest_pos_out       => next_pbest_pos,
+            pbest_power_out     => next_pbest_power,
+            pbest_age_out       => next_pbest_age,
+            gbest_pos_out       => next_gbest_pos,
+            gbest_power_out     => next_gbest_power,
+            drop_counter_out    => next_drop_counter
+        );
+
+    u_random_coefficients: entity work.pso_random_coeff_unit
+        generic map (
+            RHO_MIN_G => RHO_MIN_G,
+            RHO_MAX_G => RHO_MAX_G
+        )
+        port map (
+            lfsr_in      => lfsr,
+            rho1_arr_out => next_rho1_arr,
+            rho2_arr_out => next_rho2_arr,
+            lfsr_out     => next_lfsr_sig
+        );
 
     process(clk, reset)
-        variable lfsr_var             : unsigned(15 downto 0);
-        variable lambda_num           : integer;
-        variable power_for_best       : integer;
-        variable aged_pbest           : integer;
-        variable updated_pbest_power  : integer;
-        variable updated_pbest_pos    : integer;
-        variable updated_pbest_age    : integer;
-        variable best_power_next      : integer;
-        variable best_pos_next        : integer;
     begin
         if reset = '1' then
             particle_pos <= INIT_POS;
@@ -287,75 +323,12 @@ begin
                         fokker_step <= ffp_step_sig;
                         pno_candidate <= refined_duty_sig;
 
-                        if MEMORY_HALF_LIFE_G <= 0 then
-                            lambda_num := 10000;
-                        else
-                            lambda_num := 10000 - ((693 * 10000) / (MEMORY_HALF_LIFE_G * 1000));
-                        end if;
-
-                        lambda_num := clamp(lambda_num, 0, 10000);
-
-                        if power_now_sig < 0 then
-                            power_for_best := 0;
-                        else
-                            power_for_best := power_now_sig;
-                        end if;
-
-                        best_power_next := 0;
-                        best_pos_next := pbest_pos(0);
-
-                        for i in 0 to N_PARTICLES - 1 loop
-                            aged_pbest := (pbest_power(i) * lambda_num) / 10000;
-                            updated_pbest_power := aged_pbest;
-                            updated_pbest_pos := pbest_pos(i);
-                            updated_pbest_age := pbest_age(i) + 1;
-
-                            if i = current_idx then
-                                if power_for_best > aged_pbest or
-                                   pbest_age(i) >= MAX_PBEST_AGE_G then
-                                    updated_pbest_power := power_for_best;
-                                    updated_pbest_pos := duty_reg;
-                                    updated_pbest_age := 0;
-                                end if;
-                            end if;
-
-                            pbest_power(i) <= updated_pbest_power;
-                            pbest_pos(i) <= updated_pbest_pos;
-                            pbest_age(i) <= updated_pbest_age;
-
-                            if i = 0 or updated_pbest_power > best_power_next then
-                                best_power_next := updated_pbest_power;
-                                best_pos_next := updated_pbest_pos;
-                            end if;
-                        end loop;
-
-                        if ENABLE_CHANGE_DETECTION_G /= 0 then
-                            if best_power_next > 0 and
-                               (power_for_best * 100) <
-                               (best_power_next * DROP_THRESHOLD_PERCENT_G) then
-
-                                if drop_counter >= DROP_PATIENCE_G - 1 then
-                                    pbest_power <= (others => power_for_best);
-                                    pbest_pos <= particle_pos;
-                                    pbest_age <= (others => 0);
-                                    gbest_power <= power_for_best;
-                                    gbest_pos <= duty_reg;
-                                    drop_counter <= 0;
-                                else
-                                    gbest_power <= best_power_next;
-                                    gbest_pos <= best_pos_next;
-                                    drop_counter <= drop_counter + 1;
-                                end if;
-                            else
-                                gbest_power <= best_power_next;
-                                gbest_pos <= best_pos_next;
-                                drop_counter <= 0;
-                            end if;
-                        else
-                            gbest_power <= best_power_next;
-                            gbest_pos <= best_pos_next;
-                            drop_counter <= 0;
-                        end if;
+                        pbest_pos <= next_pbest_pos;
+                        pbest_power <= next_pbest_power;
+                        pbest_age <= next_pbest_age;
+                        gbest_pos <= next_gbest_pos;
+                        gbest_power <= next_gbest_power;
+                        drop_counter <= next_drop_counter;
 
                         prev_power <= power_now_sig;
                         prev_voltage <= voltage_now_sig;
@@ -380,17 +353,9 @@ begin
                             search_center <= clamp((gbest_pos + pno_candidate) / 2, DUTY_MIN, DUTY_MAX);
                         end if;
 
-                        lfsr_var := lfsr;
-
-                        for i in 0 to N_PARTICLES - 1 loop
-                            lfsr_var := next_lfsr(lfsr_var);
-                            rho1_arr(i) <= rand_rho(lfsr_var, RHO_MIN_G, RHO_MAX_G);
-
-                            lfsr_var := next_lfsr(lfsr_var);
-                            rho2_arr(i) <= rand_rho(lfsr_var, RHO_MIN_G, RHO_MAX_G);
-                        end loop;
-
-                        lfsr <= lfsr_var;
+                        rho1_arr <= next_rho1_arr;
+                        rho2_arr <= next_rho2_arr;
+                        lfsr <= next_lfsr_sig;
                         state <= UPDATE_SWARM;
 
                     when UPDATE_SWARM =>

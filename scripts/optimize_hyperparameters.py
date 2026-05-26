@@ -14,12 +14,16 @@ from gen_results import calculate_day_metrics, read_result_file, summarize_month
 
 
 VHDL_FILES = [
-    "hybrid_mppt_pkg.vhd",
-    "mppt_measurement_unit.vhd",
-    "mppt_fuzzy_ffp_unit.vhd",
-    "pso_particle_update_unit.vhd",
-    "hybrid_pso_fuzzy_mppt.vhd",
-    "tb_hybrid_pso_fuzzy_export.vhd",
+    "rlt/hybrid_mppt_pkg.vhd",
+    "rlt/mppt_measurement_unit.vhd",
+    "rlt/mppt_fuzzy_ffp_unit.vhd",
+    "rlt/pso_search_window_unit.vhd",
+    "rlt/pso_random_coeff_unit.vhd",
+    "rlt/pso_particle_update_unit.vhd",
+    "rlt/pso_swarm_update_unit.vhd",
+    "rlt/pso_best_tracker_unit.vhd",
+    "rlt/hybrid_pso_fuzzy_mppt.vhd",
+    "rlt/tb_hybrid_pso_fuzzy_export.vhd",
 ]
 
 # Rodada 1: busca ampla nos parametros que mais afetam a dinamica

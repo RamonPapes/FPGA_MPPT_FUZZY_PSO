@@ -133,10 +133,20 @@ $ResultsPath = Resolve-FromBase $ProjectRoot $ResultsDir
 $PreprocessedPath = Resolve-FromBase $ResultsPath $PreprocessedDir
 $PlotsPath = Resolve-FromBase $ResultsPath $PlotsDir
 $OptimizationPath = Resolve-FromBase $ResultsPath $OptimizationDir
+$RtlPath = Join-Path $ProjectRoot "rlt"
 
-$PkgFile = Join-Path $ProjectRoot "hybrid_mppt_pkg.vhd"
-$TopFile = Join-Path $ProjectRoot "hybrid_pso_fuzzy_mppt.vhd"
-$TbFile  = Join-Path $ProjectRoot "tb_hybrid_pso_fuzzy_export.vhd"
+$VhdlFiles = @(
+    "hybrid_mppt_pkg.vhd",
+    "mppt_measurement_unit.vhd",
+    "mppt_fuzzy_ffp_unit.vhd",
+    "pso_search_window_unit.vhd",
+    "pso_random_coeff_unit.vhd",
+    "pso_particle_update_unit.vhd",
+    "pso_swarm_update_unit.vhd",
+    "pso_best_tracker_unit.vhd",
+    "hybrid_pso_fuzzy_mppt.vhd",
+    "tb_hybrid_pso_fuzzy_export.vhd"
+)
 
 $PreprocessScript = Join-Path $ScriptsPath "pre_process_data.py"
 $MetricsScript = Join-Path $ScriptsPath "gen_results.py"
@@ -148,16 +158,12 @@ if (-not (Test-Path $ArchivePath)) {
     throw "Pasta archive nao encontrada: $ArchivePath"
 }
 
-if (-not (Test-Path $PkgFile)) {
-    throw "Arquivo nao encontrado: $PkgFile"
-}
+foreach ($VhdlFile in $VhdlFiles) {
+    $VhdlPath = Join-Path $RtlPath $VhdlFile
 
-if (-not (Test-Path $TopFile)) {
-    throw "Arquivo nao encontrado: $TopFile"
-}
-
-if (-not (Test-Path $TbFile)) {
-    throw "Arquivo nao encontrado: $TbFile"
+    if (-not (Test-Path $VhdlPath)) {
+        throw "Arquivo VHDL nao encontrado: $VhdlPath"
+    }
 }
 
 if (-not (Test-Path $PreprocessScript)) {
@@ -227,12 +233,9 @@ try {
         vlib work
     }
 
-    vcom -2008 "hybrid_mppt_pkg.vhd"
-    vcom -2008 "mppt_measurement_unit.vhd"
-    vcom -2008 "mppt_fuzzy_ffp_unit.vhd"
-    vcom -2008 "pso_particle_update_unit.vhd"
-    vcom -2008 "hybrid_pso_fuzzy_mppt.vhd"
-    vcom -2008 "tb_hybrid_pso_fuzzy_export.vhd"
+    foreach ($VhdlFile in $VhdlFiles) {
+        vcom -2008 (Join-Path "rlt" $VhdlFile)
+    }
 
     $DatasetFiles = Get-ChildItem -Path $PreprocessedPath -Filter "*_dataset.txt" | Sort-Object Name
 

@@ -8,12 +8,16 @@ Relatorio em desenvolvimento: [Overleaf](https://www.overleaf.com/read/cqjckrcsc
 
 ## Estrutura
 
-- `hybrid_mppt_pkg.vhd`: constantes, tipos, regras fuzzy e funcoes auxiliares.
-- `mppt_measurement_unit.vhd`: calcula potencia, erro e variacao do erro.
-- `mppt_fuzzy_ffp_unit.vhd`: calcula a acao fuzzy/Fokker--Planck sobre o duty cycle.
-- `pso_particle_update_unit.vhd`: atualiza posicao e velocidade das particulas do PSO.
-- `hybrid_pso_fuzzy_mppt.vhd`: modulo principal do controlador hibrido.
-- `tb_hybrid_pso_fuzzy_export.vhd`: testbench que le os dados e exporta resultados.
+- `rlt/hybrid_mppt_pkg.vhd`: constantes, tipos, regras fuzzy e funcoes auxiliares.
+- `rlt/mppt_measurement_unit.vhd`: calcula potencia, erro e variacao do erro.
+- `rlt/mppt_fuzzy_ffp_unit.vhd`: calcula a acao fuzzy/Fokker--Planck sobre o duty cycle.
+- `rlt/pso_search_window_unit.vhd`: calcula a janela dinamica de busca do PSO.
+- `rlt/pso_random_coeff_unit.vhd`: gera os coeficientes pseudoaleatorios do enxame.
+- `rlt/pso_particle_update_unit.vhd`: atualiza posicao e velocidade de uma particula.
+- `rlt/pso_swarm_update_unit.vhd`: instancia a atualizacao paralela das particulas.
+- `rlt/pso_best_tracker_unit.vhd`: atualiza `pbest`, `gbest` e a deteccao de queda de potencia.
+- `rlt/hybrid_pso_fuzzy_mppt.vhd`: modulo principal do controlador hibrido.
+- `rlt/tb_hybrid_pso_fuzzy_export.vhd`: testbench que le os dados e exporta resultados.
 - `run_experiment.ps1`: script principal de reproducao dos experimentos.
 
 ## Scripts
