@@ -1,0 +1,9 @@
+corner,clock,period_ns,target_mhz,setup_slack_ns,fmax_mhz,hold_slack_ns,recovery_slack_ns,removal_slack_ns,mpw_slack_ns
+Slow 1100mV 85C Model,clk_osc,20.000,50.000,14.362,177.368,0.470,n/a,n/a,8.882
+Slow 1100mV 85C Model,clk_core,320.000,3.125,135.266,5.413,0.598,314.446,1.360,8.882
+Slow 1100mV 0C Model,clk_osc,20.000,50.000,14.520,182.482,0.476,n/a,n/a,8.911
+Slow 1100mV 0C Model,clk_core,320.000,3.125,128.782,5.230,0.582,314.731,1.279,8.911
+Fast 1100mV 85C Model,clk_osc,20.000,50.000,16.678,301.023,0.184,n/a,n/a,8.944
+Fast 1100mV 85C Model,clk_core,320.000,3.125,230.842,11.216,0.250,316.432,0.599,8.944
+Fast 1100mV 0C Model,clk_osc,20.000,50.000,17.023,335.909,0.173,n/a,n/a,9.002
+Fast 1100mV 0C Model,clk_core,320.000,3.125,236.774,12.015,0.235,316.872,0.507,9.002

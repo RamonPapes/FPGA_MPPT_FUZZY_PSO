@@ -45,6 +45,42 @@ Tres decisoes de RTL existem por causa de area, e nao de algoritmo:
   feitas sobre a magnitude (`div_trunc`). Com `integer` puro e divisao com
   sinal, o Quartus infere `lpm_divide` de 32 bits em cada `/`.
 
+## Analise temporal (STA)
+
+As restricoes estao em `mptt_fuzzy_pso.sdc`, referenciado pelo `.qsf`. Sem
+esse arquivo o Quartus assume um clock default de 1 GHz e o relatorio de
+timing gerado nao significa nada.
+
+O caminho critico do controlador limita o core a cerca de 5,6 MHz no pior
+canto. Como o oscilador do DE0-CV e de 50 MHz, `mppt_clock_reset_unit` divide
+o clock por `CLK_DIV_G` (16 por padrao, resultando em 3,125 MHz) e ainda
+sincroniza a liberacao do reset, para que recovery e removal possam ser
+analisados de fato em vez de mascarados.
+
+Se alterar `CLK_DIV_G` em `mppt_fpga_top`, altere tambem `CLK_DIV` no `.sdc`.
+Os dois precisam concordar, senao o clock analisado deixa de ser o clock
+implementado.
+
+As portas de dados sao declaradas como false path: o prototipo e alimentado
+por arquivo no testbench, nao por um ADC com timing especificado, entao
+modelar `set_input_delay` seria inventar numeros. A analise fica concentrada
+nos caminhos registrador a registrador, que definem o Fmax do controlador.
+
+Para rodar e extrair as metricas:
+
+```powershell
+quartus_fit mptt_fuzzy_pso -c mptt_fuzzy_pso
+quartus_sta -t scripts\run_sta.tcl
+```
+
+Saidas em `results_final/sta/`:
+
+- `sta_summary.csv`: por canto de operacao, Fmax e slack de setup, hold,
+  recovery, removal e largura minima de pulso.
+- `sta_critical_paths.csv`: os caminhos criticos de setup, com no de origem
+  e destino.
+- `sta_full_report.txt`: relatorio completo, para anexar ao trabalho.
+
 ## Verificacao da refatoracao
 
 - `verification/tb_equivalence.vhd`: roda o RTL atual e o RTL original

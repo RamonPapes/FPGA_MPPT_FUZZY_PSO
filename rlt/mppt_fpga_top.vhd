@@ -20,6 +20,11 @@ use work.hybrid_mppt_pkg.ALL;
 
 entity mppt_fpga_top is
     generic (
+        -- Divisao do oscilador da placa para gerar o clock do core. Deve ser
+        -- par e precisa bater com a variavel CLK_DIV do mptt_fuzzy_pso.sdc.
+        -- 50 MHz / 16 = 3,125 MHz, contra um Fmax de 5,63 MHz no pior canto.
+        CLK_DIV_G         : positive := 16;
+
         SETTLE_CYCLES     : integer := 1000;
         W_PSO_G           : integer := 70;
         C1_PSO_G          : integer := 60;
@@ -46,8 +51,8 @@ entity mppt_fpga_top is
         DROP_PATIENCE_G : integer := 30
     );
     port (
-        clk         : in  std_logic;
-        reset       : in  std_logic;
+        clk         : in  std_logic;   -- oscilador da placa, 50 MHz
+        reset       : in  std_logic;   -- assincrono, ativo alto
         enable      : in  std_logic;
 
         current_in  : in  std_logic_vector(15 downto 0);  -- Q1.15 normalizado
@@ -69,7 +74,21 @@ architecture Structural of mppt_fpga_top is
     signal delta_e_unused      : err_t;
     signal fuzzy_delta_unused  : rule_t;
 
+    signal clk_core   : std_logic;
+    signal reset_core : std_logic;
+
 begin
+
+    u_clock_reset: entity work.mppt_clock_reset_unit
+        generic map (
+            CLK_DIV_G => CLK_DIV_G
+        )
+        port map (
+            clk_in     => clk,
+            reset_in   => reset,
+            clk_core   => clk_core,
+            reset_core => reset_core
+        );
 
     u_hybrid_controller: entity work.hybrid_pso_fuzzy_mppt
         generic map (
@@ -99,8 +118,8 @@ begin
             DROP_PATIENCE_G => DROP_PATIENCE_G
         )
         port map (
-            clk              => clk,
-            reset            => reset,
+            clk              => clk_core,
+            reset            => reset_core,
             enable           => enable,
 
             current_in       => signed(current_in),

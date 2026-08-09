@@ -62,7 +62,9 @@ set_global_assignment -name VHDL_FILE rlt/pso_particle_update_unit.vhd
 set_global_assignment -name VHDL_FILE rlt/pso_best_tracker_unit.vhd
 set_global_assignment -name VHDL_FILE rlt/hybrid_pso_fuzzy_mppt.vhd
 set_global_assignment -name VHDL_FILE rlt/mppt_top.vhd
+set_global_assignment -name VHDL_FILE rlt/mppt_clock_reset_unit.vhd
 set_global_assignment -name VHDL_FILE rlt/mppt_fpga_top.vhd
+set_global_assignment -name SDC_FILE mptt_fuzzy_pso.sdc
 set_global_assignment -name PARTITION_NETLIST_TYPE SOURCE -section_id Top
 set_global_assignment -name PARTITION_FITTER_PRESERVATION_LEVEL PLACEMENT_AND_ROUTING -section_id Top
 set_global_assignment -name PARTITION_COLOR 16764057 -section_id Top

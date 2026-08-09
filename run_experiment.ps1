@@ -145,6 +145,7 @@ $VhdlFiles = @(
     "pso_best_tracker_unit.vhd",
     "hybrid_pso_fuzzy_mppt.vhd",
     "mppt_top.vhd",
+    "mppt_clock_reset_unit.vhd",
     "mppt_fpga_top.vhd",
     "tb_hybrid_pso_fuzzy_export.vhd"
 )
