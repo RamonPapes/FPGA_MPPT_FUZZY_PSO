@@ -13,41 +13,61 @@ entity mppt_measurement_unit is
     port (
         current_in    : in  signed(15 downto 0);
         voltage_in    : in  signed(15 downto 0);
-        prev_power    : in  integer;
-        prev_voltage  : in  integer;
-        prev_error    : in  integer;
+        prev_power    : in  power_t;
+        prev_voltage  : in  volt_t;
+        prev_error    : in  err_t;
 
-        power_now     : out integer;
-        voltage_now   : out integer;
-        delta_p       : out integer;
-        delta_v       : out integer;
-        error_next    : out integer;
-        delta_e_next  : out integer
+        power_now     : out power_t;
+        voltage_now   : out volt_t;
+        delta_p       : out delta_t;
+        delta_v       : out delta_t;
+        error_next    : out err_t;
+        delta_e_next  : out err_t
     );
 end mppt_measurement_unit;
 
 architecture Behavioral of mppt_measurement_unit is
+
+    -- Produto bruto tensao x corrente, antes do reescalonamento. Dois
+    -- operandos de 16 bits com sinal cabem em 31 bits.
+    subtype raw_power_t is integer range -(2 ** 30) to (2 ** 30) - 1;
+
+    -- Numerador do quociente dP/dV depois do ganho. Cobre ERROR_GAIN_G ate
+    -- 255 com delta_p no pior caso.
+    subtype error_num_t is integer range -(2 ** 24) to (2 ** 24) - 1;
+
 begin
 
+    -- Verificada na elaboracao. error_num_t foi dimensionado para delta_p no
+    -- pior caso (+/-65535) vezes o ganho; acima de 255 o produto estoura.
+    assert ERROR_GAIN_G <= 255
+        report "ERROR_GAIN_G acima de 255 estoura error_num_t. " &
+               "Alargue o subtipo error_num_t em mppt_measurement_unit.vhd."
+        severity failure;
+
     process(all)
-        variable voltage_now_v  : integer;
-        variable power_now_v    : integer;
-        variable delta_p_v      : integer;
-        variable delta_v_v      : integer;
+        variable voltage_now_v  : volt_t;
+        variable raw_power_v    : raw_power_t;
+        variable power_now_v    : power_t;
+        variable delta_p_v      : delta_t;
+        variable delta_v_v      : delta_t;
         variable error_gain_v   : integer;
         variable delta_v_min_v  : integer;
-        variable error_raw_v    : integer;
-        variable error_next_v   : integer;
-        variable delta_e_next_v : integer;
+        variable error_num_v    : error_num_t;
+        variable error_raw_v    : error_num_t;
+        variable error_next_v   : err_t;
+        variable delta_e_next_v : err_t;
     begin
         voltage_now_v := to_integer(voltage_in);
-        
+
+        raw_power_v := to_integer(current_in) * voltage_now_v;
+
         if POWER_SCALE_DEN_G <= 0 then
-            power_now_v := (to_integer(current_in) * voltage_now_v) / 1;
+            power_now_v := raw_power_v / 1;
         else
-            power_now_v := (to_integer(current_in) * voltage_now_v) / POWER_SCALE_DEN_G;
+            power_now_v := raw_power_v / POWER_SCALE_DEN_G;
         end if;
-        
+
         delta_p_v := power_now_v - prev_power;
         delta_v_v := voltage_now_v - prev_voltage;
 
@@ -68,7 +88,8 @@ begin
         if abs_int(delta_v_v) < delta_v_min_v then
             error_raw_v := 0;
         else
-            error_raw_v := (delta_p_v * error_gain_v) / delta_v_v;
+            error_num_v := delta_p_v * error_gain_v;
+            error_raw_v := error_num_v / delta_v_v;
         end if;
 
         error_next_v := clamp(error_raw_v, -100, 100);

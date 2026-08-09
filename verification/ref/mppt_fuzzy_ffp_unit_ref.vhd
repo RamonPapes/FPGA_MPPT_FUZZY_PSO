@@ -2,9 +2,9 @@ library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
 
-use work.hybrid_mppt_pkg.ALL;
+use work.hybrid_mppt_pkg_ref.ALL;
 
-entity mppt_fuzzy_ffp_unit is
+entity mppt_fuzzy_ffp_unit_ref is
     generic (
         DEADZONE_G        : integer := 2;
         FOKKER_STEP_MIN_G : integer := 1;
@@ -14,31 +14,27 @@ entity mppt_fuzzy_ffp_unit is
         DUTY_DIRECTION_G  : integer := -1
     );
     port (
-        duty_in       : in  duty_t;
-        delta_p       : in  delta_t;
-        delta_v       : in  delta_t;
-        error_in      : in  err_t;
-        delta_e_in    : in  err_t;
+        duty_in       : in  integer;
+        delta_p       : in  integer;
+        delta_v       : in  integer;
+        error_in      : in  integer;
+        delta_e_in    : in  integer;
 
-        fuzzy_delta   : out rule_t;
-        fokker_step   : out step_t;
-        refined_duty  : out duty_t
+        fuzzy_delta   : out integer;
+        fokker_step   : out integer;
+        refined_duty  : out integer
     );
-end mppt_fuzzy_ffp_unit;
+end mppt_fuzzy_ffp_unit_ref;
 
-architecture Behavioral of mppt_fuzzy_ffp_unit is
+architecture Behavioral of mppt_fuzzy_ffp_unit_ref is
 begin
 
     process(all)
-        variable fuzzy_next   : rule_t;
-        variable step_next    : step_t;
-        variable pno_dir      : integer range -1 to 1;
-        variable refined_next : duty_t;
+        variable fuzzy_next   : integer;
+        variable step_next    : integer;
+        variable pno_dir      : integer;
+        variable refined_next : integer;
     begin
-        -- O motor fuzzy e avaliado uma unica vez. Antes, fokker_planck_step
-        -- chamava fuzzy_compute de novo com os mesmos argumentos, o que fazia
-        -- o Quartus instanciar dois motores fuzzy completos em paralelo (14
-        -- funcoes de pertinencia, 49 regras e um divisor cada).
         fuzzy_next := fuzzy_compute(
             error_in,
             delta_e_in,
@@ -48,9 +44,13 @@ begin
         );
 
         step_next := fokker_planck_step(
-            fuzzy_next,
+            error_in,
+            delta_e_in,
+            DEADZONE_G,
             FOKKER_STEP_MIN_G,
-            FOKKER_STEP_MAX_G
+            FOKKER_STEP_MAX_G,
+            FUZZY_STEP_G,
+            FUZZY_EDGE_G
         );
 
         pno_dir := pno_direction(delta_p, delta_v);

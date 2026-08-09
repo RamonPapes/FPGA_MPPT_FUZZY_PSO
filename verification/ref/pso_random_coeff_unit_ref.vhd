@@ -2,28 +2,28 @@ library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
 
-use work.hybrid_mppt_pkg.ALL;
+use work.hybrid_mppt_pkg_ref.ALL;
 
-entity pso_random_coeff_unit is
+entity pso_random_coeff_unit_ref is
     generic (
         RHO_MIN_G : integer := 53;
         RHO_MAX_G : integer := 56
     );
     port (
         lfsr_in      : in  unsigned(15 downto 0);
-        rho1_arr_out : out coeff_array;
-        rho2_arr_out : out coeff_array;
+        rho1_arr_out : out particle_array;
+        rho2_arr_out : out particle_array;
         lfsr_out     : out unsigned(15 downto 0)
     );
-end pso_random_coeff_unit;
+end pso_random_coeff_unit_ref;
 
-architecture Combinational of pso_random_coeff_unit is
+architecture Combinational of pso_random_coeff_unit_ref is
 begin
 
     process(all)
         variable lfsr_var : unsigned(15 downto 0);
-        variable rho1_var : coeff_array;
-        variable rho2_var : coeff_array;
+        variable rho1_var : particle_array;
+        variable rho2_var : particle_array;
     begin
         lfsr_var := lfsr_in;
 

@@ -2,82 +2,23 @@ library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
 
-package hybrid_mppt_pkg is
+package hybrid_mppt_pkg_ref is
 
     constant N_PARTICLES : integer := 10;
 
     constant DUTY_MIN : integer := 0;
     constant DUTY_MAX : integer := 100;
 
-    -- ------------------------------------------------------------------
-    -- Subtipos com faixa explicita.
-    --
-    -- O uso de "integer" puro fazia o Quartus inferir 32 bits em todos os
-    -- sinais internos e, principalmente, em todos os operadores "/", o que
-    -- gerava divisores lpm_divide de 32 bits (LPM_WIDTHN = 32). Restringir a
-    -- faixa reduz drasticamente a largura dos multiplicadores, divisores e
-    -- registradores inferidos, sem alterar nenhum valor calculado.
-    -- ------------------------------------------------------------------
-
-    -- Duty cycle e posicao de particula: 0..100.
-    subtype duty_t is integer range DUTY_MIN to DUTY_MAX;
-
-    -- Erro e variacao do erro, ja saturados em +/-100 pela unidade de medida.
-    subtype err_t is integer range -100 to 100;
-
-    -- Grau de pertinencia fuzzy, em escala percentual.
-    subtype mu_t is integer range 0 to 100;
-
-    -- Saida defuzzificada e valores da tabela de regras.
-    subtype rule_t is integer range -100 to 100;
-
-    -- Velocidade de particula. A faixa acomoda com folga qualquer
-    -- VEL_MIN_G/VEL_MAX_G razoavel antes da saturacao.
-    subtype vel_t is integer range -512 to 511;
-
-    -- Passo do refinamento Fokker-Planck.
-    subtype step_t is integer range 0 to 255;
-
-    -- Coeficientes do PSO (W, C1, C2) e coeficientes pseudoaleatorios rho.
-    subtype coeff_t is integer range 0 to 255;
-
-    -- Potencia instantanea. Com V em Q12.4 e I em Q1.15, ambos de 16 bits
-    -- com sinal, o produto dividido por 65536 fica limitado a +/-16384.
-    subtype power_t is integer range -32768 to 32767;
-
-    -- Tensao amostrada e as diferencas delta_p / delta_v.
-    subtype volt_t is integer range -32768 to 32767;
-    subtype delta_t is integer range -65536 to 65535;
-
-    -- Idade do pbest, usada pelo criterio MAX_PBEST_AGE_G.
-    subtype age_t is integer range 0 to 65535;
-
-    -- Contador de paciencia da deteccao de queda de potencia.
-    subtype drop_t is integer range 0 to 65535;
-
-    -- Indice de particula.
-    subtype particle_idx_t is integer range 0 to N_PARTICLES - 1;
-
-    -- ------------------------------------------------------------------
-    -- Tipos de vetor
-    -- ------------------------------------------------------------------
-
-    type duty_array is array (0 to N_PARTICLES - 1) of duty_t;
-    type vel_array is array (0 to N_PARTICLES - 1) of vel_t;
-    type power_array is array (0 to N_PARTICLES - 1) of power_t;
-    type age_array is array (0 to N_PARTICLES - 1) of age_t;
-    type coeff_array is array (0 to N_PARTICLES - 1) of coeff_t;
-
-    type fuzzy_array is array (0 to 6) of mu_t;
-    type rule_table is array (0 to 6, 0 to 6) of rule_t;
+    type particle_array is array (0 to N_PARTICLES - 1) of integer;
+    type fuzzy_array is array (0 to 6) of integer;
+    type rule_table is array (0 to 6, 0 to 6) of integer;
 
     type state_type is (
         APPLY_PARTICLE,
         WAIT_SETTLE,
         SAMPLE_AND_UPDATE,
         PREPARE_SWARM,
-        UPDATE_SWARM,
-        FINALIZE_SWARM
+        UPDATE_SWARM
     );
 
     constant FUZZY_RULES : rule_table := (
@@ -90,39 +31,25 @@ package hybrid_mppt_pkg is
         (   0,   10,  20,  40,  60,  80, 100)
     );
 
-    -- Faixas do acumulador de defuzzificacao. Sao 49 regras, cada uma
-    -- contribuindo com min_mu (0..100) vezes rule_val (-100..100).
-    constant DEFUZZ_DEN_MAX : integer := 49 * 100;
-    constant DEFUZZ_NUM_MAX : integer := 49 * 100 * 100;
-
-    subtype defuzz_num_t is integer range -DEFUZZ_NUM_MAX to DEFUZZ_NUM_MAX;
-    subtype defuzz_den_t is integer range 0 to DEFUZZ_DEN_MAX;
-
-    -- Numerador e denominador das funcoes de pertinencia. Com e e de
-    -- saturados em +/-100, a maior diferenca possivel entre dois pontos de
-    -- quebra e 200, logo o numerador nao passa de 200 * 100.
-    subtype mf_num_t is integer range 0 to 20000;
-    subtype mf_den_t is integer range 1 to 200;
-
     function clamp(x, low, high : integer) return integer;
     function max_int(a, b : integer) return integer;
     function min_int(a, b : integer) return integer;
     function abs_int(x : integer) return integer;
     function sign_int(x : integer) return integer;
 
-    function triangle(x, a, b, c : integer) return mu_t;
+    function triangle(x, a, b, c : integer) return integer;
 
     function trapezoidal_shoulder_neg(
         x, plateau_end, slope_start, slope_end : integer
-    ) return mu_t;
+    ) return integer;
 
     function trapezoidal_shoulder_pos(
         x, slope_start, slope_end, plateau_start : integer
-    ) return mu_t;
+    ) return integer;
 
     function next_lfsr(x : unsigned(15 downto 0)) return unsigned;
-    function rand_0_100(x : unsigned(15 downto 0)) return duty_t;
-    function rand_rho(x : unsigned(15 downto 0); rho_min, rho_max : integer) return coeff_t;
+    function rand_0_100(x : unsigned(15 downto 0)) return integer;
+    function rand_rho(x : unsigned(15 downto 0); rho_min, rho_max : integer) return integer;
 
     function fuzzy_compute(
         e_in,
@@ -130,37 +57,24 @@ package hybrid_mppt_pkg is
         deadzone,
         fuzzy_step,
         fuzzy_edge : integer
-    ) return rule_t;
+    ) return integer;
 
-    -- Recebe o valor fuzzy ja calculado. Antes esta funcao chamava
-    -- fuzzy_compute internamente, o que instanciava um segundo motor fuzzy
-    -- completo em paralelo com o primeiro.
     function fokker_planck_step(
-        fuzzy_val,
+        e_in,
+        de_in,
+        deadzone,
         fokker_step_min,
-        fokker_step_max : integer
-    ) return step_t;
+        fokker_step_max,
+        fuzzy_step,
+        fuzzy_edge : integer
+    ) return integer;
 
     function pno_direction(delta_p, delta_v : integer) return integer;
 
-    -- Divisao inteira com truncamento em direcao a zero, identica ao operador
-    -- "/" do VHDL, porem executada sobre a magnitude.
-    --
-    -- Motivo: divisao COM SINAL por uma constante que nao e potencia de dois
-    -- (100, 10000) trunca em direcao a zero e o Quartus so consegue
-    -- implementa-la com um lpm_divide completo. A mesma conta sobre um valor
-    -- SEM SINAL vira multiplicacao por reciproco mais deslocamento, em LUTs.
-    -- Como o numerador e reduzido a magnitude antes da divisao e o sinal e
-    -- reaplicado depois, o resultado e bit a bit igual ao de num/den.
-    --
-    -- num_bits deve comportar abs(num) e serve para manter o operador
-    -- estreito; sem ele o Quartus assume 32 bits.
-    function div_trunc(num : integer; den : positive; num_bits : positive) return integer;
-
-end package hybrid_mppt_pkg;
+end package hybrid_mppt_pkg_ref;
 
 
-package body hybrid_mppt_pkg is
+package body hybrid_mppt_pkg_ref is
 
     function clamp(x, low, high : integer) return integer is
     begin
@@ -211,20 +125,7 @@ package body hybrid_mppt_pkg is
         end if;
     end function;
 
-    -- ------------------------------------------------------------------
-    -- Funcoes de pertinencia.
-    --
-    -- Os quocientes sao montados com numerador e denominador estritamente
-    -- positivos (natural) em vez de integer com sinal. Divisao com sinal
-    -- trunca em direcao a zero e o Quartus a implementa com lpm_divide;
-    -- divisao sem sinal por constante vira multiplicacao por reciproco e
-    -- deslocamento, em LUTs. O valor resultante e identico, porque nesses
-    -- ramos os operandos ja eram positivos.
-    -- ------------------------------------------------------------------
-
-    function triangle(x, a, b, c : integer) return mu_t is
-        variable num : mf_num_t;
-        variable den : mf_den_t;
+    function triangle(x, a, b, c : integer) return integer is
     begin
         if b <= a or c <= b then
             return 0;
@@ -233,21 +134,15 @@ package body hybrid_mppt_pkg is
         elsif x = b then
             return 100;
         elsif x < b then
-            num := (x - a) * 100;
-            den := b - a;
+            return ((x - a) * 100) / (b - a);
         else
-            num := (c - x) * 100;
-            den := c - b;
+            return ((c - x) * 100) / (c - b);
         end if;
-
-        return num / den;
     end function;
 
     function trapezoidal_shoulder_neg(
         x, plateau_end, slope_start, slope_end : integer
-    ) return mu_t is
-        variable num : mf_num_t;
-        variable den : mf_den_t;
+    ) return integer is
     begin
         if slope_end <= slope_start then
             return 0;
@@ -256,10 +151,7 @@ package body hybrid_mppt_pkg is
         elsif x >= slope_end then
             return 0;
         elsif x > slope_start then
-            num := (slope_end - x) * 100;
-            den := slope_end - slope_start;
-
-            return num / den;
+            return ((slope_end - x) * 100) / (slope_end - slope_start);
         else
             return 100;
         end if;
@@ -267,9 +159,7 @@ package body hybrid_mppt_pkg is
 
     function trapezoidal_shoulder_pos(
         x, slope_start, slope_end, plateau_start : integer
-    ) return mu_t is
-        variable num : mf_num_t;
-        variable den : mf_den_t;
+    ) return integer is
     begin
         if slope_end <= slope_start then
             return 0;
@@ -278,10 +168,7 @@ package body hybrid_mppt_pkg is
         elsif x <= slope_start then
             return 0;
         elsif x < slope_end then
-            num := (x - slope_start) * 100;
-            den := slope_end - slope_start;
-
-            return num / den;
+            return ((x - slope_start) * 100) / (slope_end - slope_start);
         else
             return 100;
         end if;
@@ -296,12 +183,12 @@ package body hybrid_mppt_pkg is
         return y;
     end function;
 
-    function rand_0_100(x : unsigned(15 downto 0)) return duty_t is
+    function rand_0_100(x : unsigned(15 downto 0)) return integer is
     begin
         return to_integer(x(7 downto 0)) mod 101;
     end function;
 
-    function rand_rho(x : unsigned(15 downto 0); rho_min, rho_max : integer) return coeff_t is
+    function rand_rho(x : unsigned(15 downto 0); rho_min, rho_max : integer) return integer is
         variable low_rho  : integer;
         variable high_rho : integer;
     begin
@@ -322,17 +209,17 @@ package body hybrid_mppt_pkg is
         deadzone,
         fuzzy_step,
         fuzzy_edge : integer
-    ) return rule_t is
+    ) return integer is
         variable mu_e  : fuzzy_array;
         variable mu_de : fuzzy_array;
 
-        variable numerator   : defuzz_num_t := 0;
-        variable denominator : defuzz_den_t := 0;
+        variable numerator   : integer := 0;
+        variable denominator : integer := 0;
 
-        variable min_mu   : mu_t;
-        variable rule_val : rule_t;
-        variable e        : err_t;
-        variable de       : err_t;
+        variable min_mu   : integer;
+        variable rule_val : integer;
+        variable e        : integer;
+        variable de       : integer;
         variable step_v   : integer;
         variable edge_v   : integer;
     begin
@@ -380,12 +267,16 @@ package body hybrid_mppt_pkg is
     end function;
 
     function fokker_planck_step(
-        fuzzy_val,
+        e_in,
+        de_in,
+        deadzone,
         fokker_step_min,
-        fokker_step_max : integer
-    ) return step_t is
-        variable mag       : mu_t;
-        variable span      : step_t;
+        fokker_step_max,
+        fuzzy_step,
+        fuzzy_edge : integer
+    ) return integer is
+        variable fuzzy_val : integer;
+        variable mag       : integer;
         variable step_val  : integer;
         variable step_min  : integer;
         variable step_max  : integer;
@@ -398,10 +289,10 @@ package body hybrid_mppt_pkg is
             step_max := fokker_step_min;
         end if;
 
+        fuzzy_val := fuzzy_compute(e_in, de_in, deadzone, fuzzy_step, fuzzy_edge);
         mag := abs_int(fuzzy_val);
-        span := step_max - step_min;
 
-        step_val := step_min + ((mag * span) / 100);
+        step_val := step_min + (mag * (step_max - step_min)) / 100;
 
         return clamp(step_val, step_min, step_max);
     end function;
@@ -429,18 +320,4 @@ package body hybrid_mppt_pkg is
         end if;
     end function;
 
-    function div_trunc(num : integer; den : positive; num_bits : positive) return integer is
-        variable mag : unsigned(num_bits - 1 downto 0);
-    begin
-        if num < 0 then
-            mag := to_unsigned(-num, num_bits) / den;
-
-            return -to_integer(mag);
-        else
-            mag := to_unsigned(num, num_bits) / den;
-
-            return to_integer(mag);
-        end if;
-    end function;
-
-end package body hybrid_mppt_pkg;
+end package body hybrid_mppt_pkg_ref;

@@ -2,9 +2,9 @@ library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
 
-use work.hybrid_mppt_pkg.ALL;
+use work.hybrid_mppt_pkg_ref.ALL;
 
-entity pso_swarm_update_unit is
+entity pso_swarm_update_unit_ref is
     generic (
         W_PSO_G   : integer := 50;
         C1_PSO_G  : integer := 50;
@@ -25,13 +25,13 @@ entity pso_swarm_update_unit is
         particle_pos_out : out particle_array;
         particle_vel_out : out particle_array
     );
-end pso_swarm_update_unit;
+end pso_swarm_update_unit_ref;
 
-architecture Structural of pso_swarm_update_unit is
+architecture Structural of pso_swarm_update_unit_ref is
 begin
 
     gen_particle_update: for i in 0 to N_PARTICLES - 1 generate
-        u_particle_update: entity work.pso_particle_update_unit
+        u_particle_update: entity work.pso_particle_update_unit_ref
             generic map (
                 W_PSO_G   => W_PSO_G,
                 C1_PSO_G  => C1_PSO_G,

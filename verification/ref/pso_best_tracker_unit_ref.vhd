@@ -2,9 +2,9 @@ library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
 
-use work.hybrid_mppt_pkg.ALL;
+use work.hybrid_mppt_pkg_ref.ALL;
 
-entity pso_best_tracker_unit is
+entity pso_best_tracker_unit_ref is
     generic (
         MEMORY_HALF_LIFE_G        : integer := 300;
         MAX_PBEST_AGE_G           : integer := 500;
@@ -13,67 +13,51 @@ entity pso_best_tracker_unit is
         DROP_PATIENCE_G           : integer := 30
     );
     port (
-        current_idx_in   : in  particle_idx_t;
-        duty_in          : in  duty_t;
-        power_now_in     : in  power_t;
-        particle_pos_in  : in  duty_array;
-        pbest_pos_in     : in  duty_array;
-        pbest_power_in   : in  power_array;
-        pbest_age_in     : in  age_array;
-        drop_counter_in  : in  drop_t;
+        current_idx_in   : in  integer range 0 to N_PARTICLES - 1;
+        duty_in          : in  integer;
+        power_now_in     : in  integer;
+        particle_pos_in  : in  particle_array;
+        pbest_pos_in     : in  particle_array;
+        pbest_power_in   : in  particle_array;
+        pbest_age_in     : in  particle_array;
+        drop_counter_in  : in  integer;
 
-        pbest_pos_out    : out duty_array;
-        pbest_power_out  : out power_array;
-        pbest_age_out    : out age_array;
-        gbest_pos_out    : out duty_t;
-        gbest_power_out  : out power_t;
-        drop_counter_out : out drop_t
+        pbest_pos_out    : out particle_array;
+        pbest_power_out  : out particle_array;
+        pbest_age_out    : out particle_array;
+        gbest_pos_out    : out integer;
+        gbest_power_out  : out integer;
+        drop_counter_out : out integer
     );
-end pso_best_tracker_unit;
+end pso_best_tracker_unit_ref;
 
-architecture Combinational of pso_best_tracker_unit is
-
-    -- O fator de decaimento e resolvido em tempo de elaboracao, entao a
-    -- multiplicacao pbest_power * lambda_num tem um operando constante.
-    -- pbest_power cabe em 16 bits e lambda_num em 14, logo 30 bits bastam.
-    constant AGED_BITS : positive := 30;
-
-    -- Comparacao da deteccao de queda: potencia (16 bits) vezes 100.
-    subtype drop_cmp_t is integer range -(2 ** 23) to (2 ** 23) - 1;
-
-    function decay_numerator return integer is
-        variable lambda : integer;
-    begin
-        if MEMORY_HALF_LIFE_G <= 0 then
-            lambda := 10000;
-        else
-            lambda := 10000 - ((693 * 10000) / (MEMORY_HALF_LIFE_G * 1000));
-        end if;
-
-        return clamp(lambda, 0, 10000);
-    end function;
-
-    constant LAMBDA_NUM : integer := decay_numerator;
-
+architecture Combinational of pso_best_tracker_unit_ref is
 begin
 
     process(all)
-        variable power_for_best      : power_t;
-        variable aged_pbest          : power_t;
-        variable updated_power       : power_t;
-        variable updated_pos         : duty_t;
-        variable updated_age         : age_t;
-        variable best_power_next     : power_t;
-        variable best_pos_next       : duty_t;
-        variable pbest_pos_next      : duty_array;
-        variable pbest_power_next    : power_array;
-        variable pbest_age_next      : age_array;
-        variable gbest_pos_next      : duty_t;
-        variable gbest_power_next    : power_t;
-        variable drop_counter_next   : drop_t;
-        variable lhs_cmp             : drop_cmp_t;
-        variable rhs_cmp             : drop_cmp_t;
+        variable lambda_num          : integer;
+        variable power_for_best      : integer;
+        variable aged_pbest          : integer;
+        variable updated_power       : integer;
+        variable updated_pos         : integer;
+        variable updated_age         : integer;
+        variable best_power_next     : integer;
+        variable best_pos_next       : integer;
+        variable pbest_pos_next      : particle_array;
+        variable pbest_power_next    : particle_array;
+        variable pbest_age_next      : particle_array;
+        variable gbest_pos_next      : integer;
+        variable gbest_power_next    : integer;
+        variable drop_counter_next   : integer;
     begin
+        if MEMORY_HALF_LIFE_G <= 0 then
+            lambda_num := 10000;
+        else
+            lambda_num := 10000 - ((693 * 10000) / (MEMORY_HALF_LIFE_G * 1000));
+        end if;
+
+        lambda_num := clamp(lambda_num, 0, 10000);
+
         if power_now_in < 0 then
             power_for_best := 0;
         else
@@ -84,10 +68,10 @@ begin
         best_pos_next := pbest_pos_in(0);
 
         for i in 0 to N_PARTICLES - 1 loop
-            aged_pbest := div_trunc(pbest_power_in(i) * LAMBDA_NUM, 10000, AGED_BITS);
+            aged_pbest := (pbest_power_in(i) * lambda_num) / 10000;
             updated_power := aged_pbest;
             updated_pos := pbest_pos_in(i);
-            updated_age := min_int(pbest_age_in(i) + 1, age_t'high);
+            updated_age := pbest_age_in(i) + 1;
 
             if i = current_idx_in then
                 if power_for_best > aged_pbest or
@@ -109,10 +93,9 @@ begin
         end loop;
 
         if ENABLE_CHANGE_DETECTION_G /= 0 then
-            lhs_cmp := power_for_best * 100;
-            rhs_cmp := best_power_next * DROP_THRESHOLD_PERCENT_G;
-
-            if best_power_next > 0 and lhs_cmp < rhs_cmp then
+            if best_power_next > 0 and
+               (power_for_best * 100) <
+               (best_power_next * DROP_THRESHOLD_PERCENT_G) then
 
                 if drop_counter_in >= DROP_PATIENCE_G - 1 then
                     pbest_power_next := (others => power_for_best);
@@ -124,7 +107,7 @@ begin
                 else
                     gbest_power_next := best_power_next;
                     gbest_pos_next := best_pos_next;
-                    drop_counter_next := min_int(drop_counter_in + 1, drop_t'high);
+                    drop_counter_next := drop_counter_in + 1;
                 end if;
             else
                 gbest_power_next := best_power_next;
