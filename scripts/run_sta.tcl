@@ -109,7 +109,7 @@ set summary_csv [open [file join $out_dir "sta_summary.csv"] w]
 puts $summary_csv "corner,clock,period_ns,target_mhz,setup_slack_ns,fmax_mhz,hold_slack_ns,recovery_slack_ns,removal_slack_ns,mpw_slack_ns"
 
 set paths_csv [open [file join $out_dir "sta_critical_paths.csv"] w]
-puts $paths_csv "corner,rank,slack_ns,from_node,to_node"
+puts $paths_csv "corner,clock,rank,slack_ns,from_node,to_node"
 
 set any_violation 0
 set corner_count 0
@@ -186,25 +186,29 @@ foreach_in_collection oc [get_available_operating_conditions] {
                 set any_violation 1
             }
         }
+
+        # Caminhos criticos DESTE dominio de clock.
+        #
+        # A filtragem por -to_clock e essencial e nao cosmetica. Pedir o pior
+        # slack global faria o clk_osc dominar a lista inteira: ele tem
+        # periodo de 20 ns e alguns nanossegundos de folga, enquanto o
+        # clk_core tem 320 ns de periodo e mais de 100 ns de folga. O
+        # resultado seria uma lista so com o contador do divisor, escondendo
+        # o caminho critico real do controlador.
+        set rank 0
+        foreach_in_collection p [get_timing_paths -setup -npaths $n_paths -detail summary -to_clock $ck] {
+            incr rank
+
+            set slack [get_path_info $p -slack]
+            set from  [get_node_info [get_path_info $p -from] -name]
+            set to    [get_node_info [get_path_info $p -to] -name]
+
+            puts $paths_csv "$corner,$cname,$rank,[fmt $slack],\"$from\",\"$to\""
+        }
     }
 
     if {$mpw_slack ne "n/a" && $mpw_slack < 0} {
         set any_violation 1
-    }
-
-    # Pior caso global do canto, para os caminhos criticos listados abaixo.
-    set setup_paths [get_timing_paths -setup -npaths $n_paths -detail summary]
-
-    # Caminhos criticos de setup.
-    set rank 0
-    foreach_in_collection p $setup_paths {
-        incr rank
-
-        set slack [get_path_info $p -slack]
-        set from  [get_node_info [get_path_info $p -from] -name]
-        set to    [get_node_info [get_path_info $p -to] -name]
-
-        puts $paths_csv "$corner,$rank,[fmt $slack],\"$from\",\"$to\""
     }
 
     # Relatorio completo deste canto, acumulado no mesmo arquivo.
