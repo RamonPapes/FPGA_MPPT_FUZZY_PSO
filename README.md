@@ -75,11 +75,56 @@ quartus_sta -t scripts\run_sta.tcl
 
 Saidas em `results_final/sta/`:
 
-- `sta_summary.csv`: por canto de operacao, Fmax e slack de setup, hold,
-  recovery, removal e largura minima de pulso.
-- `sta_critical_paths.csv`: os caminhos criticos de setup, com no de origem
-  e destino.
-- `sta_full_report.txt`: relatorio completo, para anexar ao trabalho.
+- `sta_summary.csv`: uma linha por clock e por canto de operacao, com Fmax e
+  os slacks de setup, hold, recovery, removal e largura minima de pulso.
+- `sta_critical_paths.csv`: os caminhos criticos de setup, separados por
+  dominio de clock, com no de origem e destino.
+- `sta_full_report.txt`: relatorio completo dos quatro cantos.
+
+Duas observacoes sobre como o script extrai os numeros, porque ambas afetam
+a leitura dos resultados.
+
+O Fmax e calculado como `1 / (T - slack)`, e nao lido do painel de relatorio
+do Quartus. A API de paineis (`get_report_panel_id`) exige o banco de
+relatorios carregado, o que nao ocorre sob `quartus_sta -t`. A conta e a
+mesma que o painel oficial faz, e o valor confere com o reportado pela
+ferramenta.
+
+Os caminhos criticos sao filtrados por dominio com `-to_clock`. Sem esse
+filtro, o `clk_osc` domina a lista inteira: ele tem periodo de 20 ns e
+poucos nanossegundos de folga, contra os 320 ns de periodo e mais de 100 ns
+de folga do `clk_core`. O resultado seria uma lista composta so pelo
+contador do divisor, escondendo o caminho critico do controlador.
+
+### Resultados
+
+Compilacao no 5CEBA4F23C7, Quartus Prime Lite 20.1.1, com o core em
+3,125 MHz (`CLK_DIV_G = 16`):
+
+| Canto | Fmax `clk_core` | Setup | Hold | Recovery | Removal | MPW |
+|---|---|---|---|---|---|---|
+| Slow 1100mV 85C | 5,413 MHz | +135,266 | +0,598 | +314,446 | +1,360 | +8,882 |
+| Slow 1100mV 0C  | 5,230 MHz | +128,782 | +0,582 | +314,731 | +1,279 | +8,911 |
+| Fast 1100mV 85C | 11,216 MHz | +230,842 | +0,250 | +316,432 | +0,599 | +8,944 |
+| Fast 1100mV 0C  | 12,015 MHz | +236,774 | +0,235 | +316,872 | +0,507 | +9,002 |
+
+Slacks em nanossegundos. Todos positivos: o projeto fecha timing em todos os
+cantos, e o Timing Analyzer reporta `Design is fully constrained` tanto para
+setup quanto para hold.
+
+O pior canto e o Slow 1100mV 0C, com **Fmax de 5,230 MHz**. O comportamento e
+o esperado: setup piora nos cantos lentos, hold piora nos rapidos. O menor
+slack do projeto inteiro e o removal de +0,507 ns no Fast 0C, no caminho do
+sincronizador de reset ate o clear dos registradores do core. E o numero a
+vigiar caso a frequencia suba.
+
+Antes de existir SDC, o Quartus reportava 5,63 MHz. O valor atual e menor
+porque agora ha `derive_clock_uncertainty` aplicando jitter e porque o
+`clk_core` e um clock de fabric numa rede global, com skew real. O numero
+anterior era otimista por omissao, nao melhor.
+
+Utilizacao correspondente: 11.899 de 18.480 ALMs (64%), 41 de 66 blocos DSP
+(62%), 44 de 224 pinos (20%), 676 registradores.
 
 ## Verificacao da refatoracao
 
