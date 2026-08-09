@@ -1,63 +1,96 @@
 # Intel Quartus Prime - .gitignore
+#
+# Principio: ignora-se o que a ferramenta recria sozinha. Tudo que e fonte
+# (VHDL, SDC, scripts) ou resultado consolidado (metricas, tabelas, relatorio
+# de STA) fica versionado.
+#
+# Nao use padroes largos como "*.txt" aqui. O projeto gera relatorios .txt
+# que interessam, e uma regra generica os esconde silenciosamente.
 
 # -------------------------------------
-# Pastas de Banco de Dados e Compilação
+# Bancos de dados e diretorios de compilacao
 # -------------------------------------
-# Estes diretórios armazenam dados intermediários de síntese e roteamento.
-# Eles são muito grandes e recriados a cada compilação.
 db/
 incremental_db/
 greybox_tmp/
-optimization_runs/
-results/optimization_runs/
 hc_output/
 .qsys_edit/
 .ipcache/
-results/*.log
+output_files/
 
 # -------------------------------------
-# Diretórios de Saída e Simulação
+# Simulacao
 # -------------------------------------
-output_files/
 simulation/
 modelsim/
 work/
-graficos_uteis/
-results/graficos_uteis/
-.venv/
+work_equiv/
+transcript
+msim_transcript
+vsim.wlf
+*.mpf
+*.mti
+*.ini
+
+# -------------------------------------
+# Dados intermediarios e saidas volumosas
+#
+# Os datasets em ponto fixo e os despejos brutos do testbench sao derivados
+# dos CSVs em archive_final/ e chegam a centenas de milhares de linhas.
+# Reproduzem-se com run_experiment.ps1.
+# -------------------------------------
 dados_pre_processados/
 results/dados_pre_processados/
-*.pyc
+optimization_runs/
+results/optimization_runs/
+graficos_uteis/
+results/graficos_uteis/
+results_final/graficos_uteis/
+*_results.txt
+*_dataset.txt
+dataset_scaled.txt
+
 # -------------------------------------
-# Logs e Relatórios
+# Relatorios e logs do Quartus
+#
+# Sao regerados a cada compilacao. O que se guarda do fluxo de timing sao os
+# arquivos de results_final/sta/, produzidos por scripts/run_sta.tcl.
 # -------------------------------------
-*.log
 *.rpt
 *.summary
+*.log
 *.done
+*.smsg
+*.qmsg
 *.jdi
 *.pin
 *.qws
 *.sld
-*.txt
-msim_transcript
+*.hex
+
+# Despejo do modelo de pinos do Cyclone V. Descreve o dispositivo, nao o
+# projeto: e identico para qualquer design no mesmo chip.
+c5_pin_model_dump.txt
+PLLJ_PLLSPE_INFO.txt
+
+# Excecao explicita: o relatorio de STA e evidencia dos numeros publicados.
+!results_final/sta/sta_full_report.txt
 
 # -------------------------------------
-# Arquivos de Programação (Bitstreams)
+# Bitstreams
+#
+# Descomente se quiser versionar releases de bitstream.
 # -------------------------------------
-# Por padrão, arquivos grandes gerados (.sof, .pof) são ignorados.
-# Se você precisa manter releases de bitstreams no repositório, 
-# comente as linhas abaixo.
 *.sof
 *.pof
 *.jic
 *.ekp
+*.rbf
+*.svf
 
 # -------------------------------------
-# Arquivos do Qsys / Platform Designer
+# Qsys / Platform Designer
 # -------------------------------------
-# Mantém-se o arquivo .qsys principal, mas os arquivos gerados 
-# automaticamente podem ser ignorados.
 *_generation_script.tcl
 *_generation.rpt
 *_inst.v
@@ -65,14 +98,14 @@ msim_transcript
 *_bb.v
 
 # -------------------------------------
-# Simulação (ModelSim / QuestaSim) específicos
+# Python
 # -------------------------------------
-*.mpf
-*.mti
-*.ini
+__pycache__/
+*.pyc
+.venv/
 
 # -------------------------------------
-# Arquivos Temporários e de Backup
+# Temporarios e backup
 # -------------------------------------
 *.bak
 *.v.bak
