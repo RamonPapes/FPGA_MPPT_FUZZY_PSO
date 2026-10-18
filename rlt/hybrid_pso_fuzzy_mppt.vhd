@@ -89,17 +89,34 @@ architecture Structural of hybrid_pso_fuzzy_mppt is
     signal next_particle_pos : duty_t := 50;
     signal next_particle_vel : vel_t := 0;
 
-    signal next_pbest_pos    : duty_array := INIT_POS;
-    signal next_pbest_power  : power_array := (others => 0);
-    signal next_pbest_age    : age_array := (others => 0);
-    signal next_gbest_pos    : duty_t := 50;
-    signal next_gbest_power  : power_t := 0;
-    signal next_drop_counter : drop_t := 0;
+    -- Saida da unica instancia do rastreador de melhores, aplicada a uma
+    -- particula por ciclo durante TRACK_BEST.
+    signal next_pbest_pos    : duty_t := 50;
+    signal next_pbest_power  : power_t := 0;
+    signal next_pbest_age    : age_t := 0;
 
-    signal rho1_arr          : coeff_array := (others => 53);
-    signal rho2_arr          : coeff_array := (others => 53);
-    signal next_rho1_arr     : coeff_array := (others => 53);
-    signal next_rho2_arr     : coeff_array := (others => 53);
+    -- Entradas multiplexadas do rastreador.
+    signal trk_pos     : duty_t := 50;
+    signal trk_power   : power_t := 0;
+    signal trk_age     : age_t := 0;
+    signal trk_is_cur  : std_logic := '0';
+
+    -- Valores amostrados no inicio de TRACK_BEST. Precisam ser registrados
+    -- porque prev_power/prev_voltage mudam no mesmo ciclo, e com eles muda
+    -- power_now_sig, que e combinacional.
+    signal track_i      : particle_idx_t := 0;
+    signal track_cur    : particle_idx_t := 0;
+    signal track_power  : power_t := 0;
+    signal track_duty   : duty_t := 50;
+
+    -- Maximo corrente da varredura, no lugar da cadeia de nove comparadores
+    -- em serie que o laco desenrolado produzia.
+    signal run_best_power : power_t := 0;
+    signal run_best_pos   : duty_t := 50;
+
+    -- Os arrays rho1_arr/rho2_arr deixaram de existir. O par de coeficientes
+    -- da particula corrente e produzido sob demanda por pso_random_coeff_unit,
+    -- diretamente sobre sel_rho1/sel_rho2.
 
     signal gbest_pos         : duty_t := 50;
     signal gbest_power       : power_t := 0;
@@ -215,8 +232,11 @@ begin
     sel_pos   <= particle_pos(swarm_idx);
     sel_vel   <= particle_vel(swarm_idx);
     sel_pbest <= pbest_pos(swarm_idx);
-    sel_rho1  <= rho1_arr(swarm_idx);
-    sel_rho2  <= rho2_arr(swarm_idx);
+
+    trk_pos    <= pbest_pos(track_i);
+    trk_power  <= pbest_power(track_i);
+    trk_age    <= pbest_age(track_i);
+    trk_is_cur <= '1' when track_i = track_cur else '0';
 
     u_particle_update: entity work.pso_particle_update_unit
         generic map (
@@ -242,28 +262,21 @@ begin
 
     u_best_tracker: entity work.pso_best_tracker_unit
         generic map (
-            MEMORY_HALF_LIFE_G          => MEMORY_HALF_LIFE_G,
-            MAX_PBEST_AGE_G             => MAX_PBEST_AGE_G,
-            ENABLE_CHANGE_DETECTION_G   => ENABLE_CHANGE_DETECTION_G,
-            DROP_THRESHOLD_PERCENT_G    => DROP_THRESHOLD_PERCENT_G,
-            DROP_PATIENCE_G             => DROP_PATIENCE_G
+            MEMORY_HALF_LIFE_G => MEMORY_HALF_LIFE_G,
+            MAX_PBEST_AGE_G    => MAX_PBEST_AGE_G
         )
         port map (
-            current_idx_in      => current_idx,
-            duty_in             => duty_reg,
-            power_now_in        => power_now_sig,
-            particle_pos_in     => particle_pos,
-            pbest_pos_in        => pbest_pos,
-            pbest_power_in      => pbest_power,
-            pbest_age_in        => pbest_age,
-            drop_counter_in     => drop_counter,
+            is_current_in   => trk_is_cur,
+            duty_in         => track_duty,
+            power_now_in    => track_power,
 
-            pbest_pos_out       => next_pbest_pos,
-            pbest_power_out     => next_pbest_power,
-            pbest_age_out       => next_pbest_age,
-            gbest_pos_out       => next_gbest_pos,
-            gbest_power_out     => next_gbest_power,
-            drop_counter_out    => next_drop_counter
+            pbest_pos_in    => trk_pos,
+            pbest_power_in  => trk_power,
+            pbest_age_in    => trk_age,
+
+            pbest_pos_out   => next_pbest_pos,
+            pbest_power_out => next_pbest_power,
+            pbest_age_out   => next_pbest_age
         );
 
     u_random_coefficients: entity work.pso_random_coeff_unit
@@ -272,13 +285,16 @@ begin
             RHO_MAX_G => RHO_MAX_G
         )
         port map (
-            lfsr_in      => lfsr,
-            rho1_arr_out => next_rho1_arr,
-            rho2_arr_out => next_rho2_arr,
-            lfsr_out     => next_lfsr_sig
+            lfsr_in   => lfsr,
+            rho1_out  => sel_rho1,
+            rho2_out  => sel_rho2,
+            lfsr_out  => next_lfsr_sig
         );
 
     process(clk, reset)
+        variable best_power_v : power_t;
+        variable best_pos_v   : duty_t;
+        variable sampled_p    : power_t;
     begin
         if reset = '1' then
             particle_pos <= INIT_POS;
@@ -287,9 +303,6 @@ begin
             pbest_power  <= (others => 0);
             pbest_age    <= (others => 0);
 
-            rho1_arr     <= (others => 53);
-            rho2_arr     <= (others => 53);
-
             gbest_pos    <= 50;
             gbest_power  <= 0;
             drop_counter <= 0;
@@ -297,6 +310,13 @@ begin
             current_idx  <= 0;
             swarm_idx    <= 0;
             wait_counter <= 0;
+
+            track_i        <= 0;
+            track_cur      <= 0;
+            track_power    <= 0;
+            track_duty     <= 50;
+            run_best_power <= 0;
+            run_best_pos   <= 50;
 
             prev_power   <= 0;
             prev_voltage <= 0;
@@ -347,25 +367,84 @@ begin
                         fokker_step <= ffp_step_sig;
                         pno_candidate <= refined_duty_sig;
 
-                        pbest_pos <= next_pbest_pos;
-                        pbest_power <= next_pbest_power;
-                        pbest_age <= next_pbest_age;
-                        gbest_pos <= next_gbest_pos;
-                        gbest_power <= next_gbest_power;
-                        drop_counter <= next_drop_counter;
-
                         prev_power <= power_now_sig;
                         prev_voltage <= voltage_now_sig;
                         prev_error <= error_next_sig;
 
-                        store_valid <= '1';
-
-                        if current_idx = N_PARTICLES - 1 then
-                            current_idx <= 0;
-                            state <= PREPARE_SWARM;
+                        -- A varredura do enxame gasta N_PARTICLES ciclos, e
+                        -- power_now_sig e combinacional sobre prev_power /
+                        -- prev_voltage, que mudam nesta mesma borda. Por isso
+                        -- a potencia e o duty da amostra sao registrados aqui,
+                        -- ja saturados como o rastreador os consumia.
+                        if power_now_sig < 0 then
+                            sampled_p := 0;
                         else
-                            current_idx <= current_idx + 1;
-                            state <= APPLY_PARTICLE;
+                            sampled_p := power_now_sig;
+                        end if;
+
+                        track_power <= sampled_p;
+                        track_duty  <= duty_reg;
+                        track_cur   <= current_idx;
+                        track_i     <= 0;
+
+                        state <= TRACK_BEST;
+
+                    -- Uma particula por ciclo. track_power, track_duty e
+                    -- track_cur ficam estaveis durante toda a varredura, entao
+                    -- cada particula enxerga o mesmo instantaneo que enxergava
+                    -- na versao combinacional desenrolada.
+                    when TRACK_BEST =>
+                        pbest_pos(track_i)   <= next_pbest_pos;
+                        pbest_power(track_i) <= next_pbest_power;
+                        pbest_age(track_i)   <= next_pbest_age;
+
+                        if track_i = 0 or next_pbest_power > run_best_power then
+                            best_power_v := next_pbest_power;
+                            best_pos_v   := next_pbest_pos;
+                        else
+                            best_power_v := run_best_power;
+                            best_pos_v   := run_best_pos;
+                        end if;
+
+                        run_best_power <= best_power_v;
+                        run_best_pos   <= best_pos_v;
+
+                        if track_i = N_PARTICLES - 1 then
+                            -- Deteccao de queda: depende do maximo final sobre
+                            -- todo o enxame, entao roda uma unica vez, aqui.
+                            if ENABLE_CHANGE_DETECTION_G /= 0 and
+                               best_power_v > 0 and
+                               (track_power * 100) < (best_power_v * DROP_THRESHOLD_PERCENT_G) then
+
+                                if drop_counter >= DROP_PATIENCE_G - 1 then
+                                    pbest_power  <= (others => track_power);
+                                    pbest_pos    <= particle_pos;
+                                    pbest_age    <= (others => 0);
+                                    gbest_power  <= track_power;
+                                    gbest_pos    <= track_duty;
+                                    drop_counter <= 0;
+                                else
+                                    gbest_power  <= best_power_v;
+                                    gbest_pos    <= best_pos_v;
+                                    drop_counter <= min_int(drop_counter + 1, drop_t'high);
+                                end if;
+                            else
+                                gbest_power  <= best_power_v;
+                                gbest_pos    <= best_pos_v;
+                                drop_counter <= 0;
+                            end if;
+
+                            store_valid <= '1';
+
+                            if track_cur = N_PARTICLES - 1 then
+                                current_idx <= 0;
+                                state <= PREPARE_SWARM;
+                            else
+                                current_idx <= track_cur + 1;
+                                state <= APPLY_PARTICLE;
+                            end if;
+                        else
+                            track_i <= track_i + 1;
                         end if;
 
                     when PREPARE_SWARM =>
@@ -377,9 +456,6 @@ begin
                             search_center <= clamp((gbest_pos + pno_candidate) / 2, DUTY_MIN, DUTY_MAX);
                         end if;
 
-                        rho1_arr <= next_rho1_arr;
-                        rho2_arr <= next_rho2_arr;
-                        lfsr <= next_lfsr_sig;
                         swarm_idx <= 0;
                         state <= UPDATE_SWARM;
 
@@ -390,6 +466,11 @@ begin
                     when UPDATE_SWARM =>
                         particle_pos(swarm_idx) <= next_particle_pos;
                         particle_vel(swarm_idx) <= next_particle_vel;
+
+                        -- Dois passos por particula: depois de N_PARTICLES
+                        -- ciclos o LFSR avancou os mesmos 20 passos que a
+                        -- versao paralela avancava de uma vez em PREPARE_SWARM.
+                        lfsr <= next_lfsr_sig;
 
                         if swarm_idx = N_PARTICLES - 1 then
                             swarm_idx <= 0;

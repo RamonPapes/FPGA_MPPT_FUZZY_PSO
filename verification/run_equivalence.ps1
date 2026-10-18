@@ -57,6 +57,7 @@ try {
         "rlt/pso_best_tracker_unit.vhd",
         "rlt/hybrid_pso_fuzzy_mppt.vhd",
         "rlt/mppt_top.vhd",
+        "rlt/mppt_clock_reset_unit.vhd",
         "rlt/mppt_fpga_top.vhd"
     )
 

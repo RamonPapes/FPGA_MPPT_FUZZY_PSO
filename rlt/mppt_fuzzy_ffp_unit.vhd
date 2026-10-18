@@ -27,25 +27,45 @@ entity mppt_fuzzy_ffp_unit is
 end mppt_fuzzy_ffp_unit;
 
 architecture Behavioral of mppt_fuzzy_ffp_unit is
+
+    -- Os pontos de quebra sao resolvidos na elaboracao, com o mesmo clamp que
+    -- fuzzy_compute aplicava em tempo de execucao.
+    constant STEP_V : integer := clamp(FUZZY_STEP_G, 1, 49);
+    constant EDGE_V : integer := clamp(FUZZY_EDGE_G, (2 * STEP_V) + 1, 100);
+
+    -- Tabela de pertinencia, calculada na elaboracao. Substitui as catorze
+    -- avaliacoes em hardware das funcoes triangle/trapezoidal_*, cada uma com
+    -- seu proprio divisor. Como mu_e depende apenas de error_in e mu_de apenas
+    -- de delta_e_in, e ambos sao um unico valor de 8 bits, os mesmos valores
+    -- saem de duas consultas a esta constante.
+    constant MF_TABLE : mf_table_t := build_mf_table(STEP_V, EDGE_V);
+
 begin
 
     process(all)
+        variable e_c          : err_t;
+        variable de_c         : err_t;
+        variable mu_e         : fuzzy_array;
+        variable mu_de        : fuzzy_array;
         variable fuzzy_next   : rule_t;
         variable step_next    : step_t;
         variable pno_dir      : integer range -1 to 1;
         variable refined_next : duty_t;
     begin
+        e_c  := clamp(error_in, -100, 100);
+        de_c := clamp(delta_e_in, -100, 100);
+
         -- O motor fuzzy e avaliado uma unica vez. Antes, fokker_planck_step
         -- chamava fuzzy_compute de novo com os mesmos argumentos, o que fazia
-        -- o Quartus instanciar dois motores fuzzy completos em paralelo (14
-        -- funcoes de pertinencia, 49 regras e um divisor cada).
-        fuzzy_next := fuzzy_compute(
-            error_in,
-            delta_e_in,
-            DEADZONE_G,
-            FUZZY_STEP_G,
-            FUZZY_EDGE_G
-        );
+        -- o Quartus instanciar dois motores fuzzy completos em paralelo.
+        if abs_int(e_c) < DEADZONE_G and abs_int(de_c) < DEADZONE_G then
+            fuzzy_next := 0;
+        else
+            mu_e  := MF_TABLE(e_c);
+            mu_de := MF_TABLE(de_c);
+
+            fuzzy_next := fuzzy_defuzz(mu_e, mu_de);
+        end if;
 
         step_next := fokker_planck_step(
             fuzzy_next,

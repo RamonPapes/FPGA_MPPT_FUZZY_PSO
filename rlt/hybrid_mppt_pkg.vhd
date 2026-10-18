@@ -50,7 +50,18 @@ package hybrid_mppt_pkg is
     subtype delta_t is integer range -65536 to 65535;
 
     -- Idade do pbest, usada pelo criterio MAX_PBEST_AGE_G.
-    subtype age_t is integer range 0 to 65535;
+    --
+    -- A idade cresce de 1 por amostra e so e zerada quando a particula e a
+    -- corrente E sua idade ja passou de MAX_PBEST_AGE_G. Entre duas visitas a
+    -- mesma particula passam N_PARTICLES amostras, logo o pico e
+    -- MAX_PBEST_AGE_G + N_PARTICLES. Com MAX_PBEST_AGE_G = 500 o maximo
+    -- observado e 509, e a faixa abaixo cobre ate 1023.
+    --
+    -- Era 0 to 65535, o que custava 16 bits por particula (160 flip-flops) e
+    -- alargava os dez somadores, comparadores e muxes de idade dentro do laco
+    -- de pso_best_tracker_unit. O assert naquele arquivo garante que a faixa
+    -- nunca seja violada em silencio se o generic mudar.
+    subtype age_t is integer range 0 to 1023;
 
     -- Contador de paciencia da deteccao de queda de potencia.
     subtype drop_t is integer range 0 to 65535;
@@ -71,10 +82,20 @@ package hybrid_mppt_pkg is
     type fuzzy_array is array (0 to 6) of mu_t;
     type rule_table is array (0 to 6, 0 to 6) of rule_t;
 
+    -- Tabela de pertinencia: para cada valor possivel da entrada (err_t, de
+    -- -100 a 100) guarda os sete graus de pertinencia. Sao 201 entradas de
+    -- 7 x 7 = 49 bits, 9.849 bits no total.
+    type mf_table_t is array (-100 to 100) of fuzzy_array;
+
+    -- TRACK_BEST percorre o enxame em serie para envelhecer os pbest e apurar
+    -- o gbest, uma particula por ciclo, no mesmo padrao de UPDATE_SWARM. Antes
+    -- esse trabalho era feito inteiro dentro de SAMPLE_AND_UPDATE, por um laco
+    -- combinacional desenrolado em dez copias.
     type state_type is (
         APPLY_PARTICLE,
         WAIT_SETTLE,
         SAMPLE_AND_UPDATE,
+        TRACK_BEST,
         PREPARE_SWARM,
         UPDATE_SWARM,
         FINALIZE_SWARM
@@ -124,13 +145,20 @@ package hybrid_mppt_pkg is
     function rand_0_100(x : unsigned(15 downto 0)) return duty_t;
     function rand_rho(x : unsigned(15 downto 0); rho_min, rho_max : integer) return coeff_t;
 
-    function fuzzy_compute(
-        e_in,
-        de_in,
-        deadzone,
-        fuzzy_step,
-        fuzzy_edge : integer
-    ) return rule_t;
+    -- Constroi a tabela de pertinencia inteira em tempo de ELABORACAO,
+    -- chamando as mesmas funcoes triangle/trapezoidal_* com os mesmos
+    -- argumentos que fuzzy_compute chamava a cada avaliacao.
+    --
+    -- Antes, as catorze funcoes de pertinencia eram avaliadas em hardware a
+    -- cada amostra, e cada uma carregava seu proprio "num / den": catorze
+    -- lpm_divide, cerca de 2.280 ALUTs. Como mu_e depende so de e e mu_de so
+    -- de de, e ambos sao um unico valor de 8 bits, o resultado cabe numa
+    -- tabela e os divisores desaparecem.
+    function build_mf_table(step_v, edge_v : integer) return mf_table_t;
+
+    -- Combina as 49 regras e defuzzifica. E a segunda metade do antigo
+    -- fuzzy_compute; a primeira virou a tabela acima.
+    function fuzzy_defuzz(mu_e, mu_de : fuzzy_array) return rule_t;
 
     -- Recebe o valor fuzzy ja calculado. Antes esta funcao chamava
     -- fuzzy_compute internamente, o que instanciava um segundo motor fuzzy
@@ -316,52 +344,29 @@ package body hybrid_mppt_pkg is
         return low_rho + (to_integer(x(7 downto 0)) mod (high_rho - low_rho + 1));
     end function;
 
-    function fuzzy_compute(
-        e_in,
-        de_in,
-        deadzone,
-        fuzzy_step,
-        fuzzy_edge : integer
-    ) return rule_t is
-        variable mu_e  : fuzzy_array;
-        variable mu_de : fuzzy_array;
+    function build_mf_table(step_v, edge_v : integer) return mf_table_t is
+        variable t : mf_table_t;
+    begin
+        for x in -100 to 100 loop
+            t(x)(0) := trapezoidal_shoulder_neg(x, -100, -edge_v, -(2 * step_v));
+            t(x)(1) := triangle(x, -edge_v, -(2 * step_v), -step_v);
+            t(x)(2) := triangle(x, -(2 * step_v), -step_v, 0);
+            t(x)(3) := triangle(x, -step_v, 0, step_v);
+            t(x)(4) := triangle(x, 0, step_v, 2 * step_v);
+            t(x)(5) := triangle(x, step_v, 2 * step_v, edge_v);
+            t(x)(6) := trapezoidal_shoulder_pos(x, 2 * step_v, edge_v, 100);
+        end loop;
 
+        return t;
+    end function;
+
+    function fuzzy_defuzz(mu_e, mu_de : fuzzy_array) return rule_t is
         variable numerator   : defuzz_num_t := 0;
         variable denominator : defuzz_den_t := 0;
 
         variable min_mu   : mu_t;
         variable rule_val : rule_t;
-        variable e        : err_t;
-        variable de       : err_t;
-        variable step_v   : integer;
-        variable edge_v   : integer;
     begin
-        e  := clamp(e_in,  -100, 100);
-        de := clamp(de_in, -100, 100);
-
-        step_v := clamp(fuzzy_step, 1, 49);
-        edge_v := clamp(fuzzy_edge, (2 * step_v) + 1, 100);
-
-        if abs_int(e) < deadzone and abs_int(de) < deadzone then
-            return 0;
-        end if;
-
-        mu_e(0) := trapezoidal_shoulder_neg(e, -100, -edge_v, -(2 * step_v));
-        mu_e(1) := triangle(e, -edge_v, -(2 * step_v), -step_v);
-        mu_e(2) := triangle(e, -(2 * step_v), -step_v, 0);
-        mu_e(3) := triangle(e, -step_v, 0, step_v);
-        mu_e(4) := triangle(e, 0, step_v, 2 * step_v);
-        mu_e(5) := triangle(e, step_v, 2 * step_v, edge_v);
-        mu_e(6) := trapezoidal_shoulder_pos(e, 2 * step_v, edge_v, 100);
-
-        mu_de(0) := trapezoidal_shoulder_neg(de, -100, -edge_v, -(2 * step_v));
-        mu_de(1) := triangle(de, -edge_v, -(2 * step_v), -step_v);
-        mu_de(2) := triangle(de, -(2 * step_v), -step_v, 0);
-        mu_de(3) := triangle(de, -step_v, 0, step_v);
-        mu_de(4) := triangle(de, 0, step_v, 2 * step_v);
-        mu_de(5) := triangle(de, step_v, 2 * step_v, edge_v);
-        mu_de(6) := trapezoidal_shoulder_pos(de, 2 * step_v, edge_v, 100);
-
         for i in 0 to 6 loop
             for j in 0 to 6 loop
                 min_mu := min_int(mu_e(i), mu_de(j));
@@ -432,13 +437,17 @@ package body hybrid_mppt_pkg is
     function div_trunc(num : integer; den : positive; num_bits : positive) return integer is
         variable mag : unsigned(num_bits - 1 downto 0);
     begin
-        if num < 0 then
-            mag := to_unsigned(-num, num_bits) / den;
+        -- Um unico operador "/". Antes havia um em cada ramo do if, e como a
+        -- sintese constroi todos os ramos antes de escolher com um mux, ela
+        -- instanciava DOIS divisores por chamada: 6 em pso_particle_update_unit
+        -- para 3 chamadas, e 20 em pso_best_tracker_unit para um laco de 10.
+        -- abs_int(num) devolve exatamente os dois numeradores originais, entao
+        -- o resultado e identico bit a bit.
+        mag := to_unsigned(abs_int(num), num_bits) / den;
 
+        if num < 0 then
             return -to_integer(mag);
         else
-            mag := to_unsigned(num, num_bits) / den;
-
             return to_integer(mag);
         end if;
     end function;

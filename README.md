@@ -51,7 +51,7 @@ As restricoes estao em `mptt_fuzzy_pso.sdc`, referenciado pelo `.qsf`. Sem
 esse arquivo o Quartus assume um clock default de 1 GHz e o relatorio de
 timing gerado nao significa nada.
 
-O caminho critico do controlador limita o core a cerca de 5,6 MHz no pior
+O caminho critico do controlador limita o core a cerca de 6,0 MHz no pior
 canto. Como o oscilador do DE0-CV e de 50 MHz, `mppt_clock_reset_unit` divide
 o clock por `CLK_DIV_G` (16 por padrao, resultando em 3,125 MHz) e ainda
 sincroniza a liberacao do reset, para que recovery e removal possam ser
@@ -103,18 +103,18 @@ Compilacao no 5CEBA4F23C7, Quartus Prime Lite 20.1.1, com o core em
 
 | Canto | Fmax `clk_core` | Setup | Hold | Recovery | Removal | MPW |
 |---|---|---|---|---|---|---|
-| Slow 1100mV 85C | 5,413 MHz | +135,266 | +0,598 | +314,446 | +1,360 | +8,882 |
-| Slow 1100mV 0C  | 5,230 MHz | +128,782 | +0,582 | +314,731 | +1,279 | +8,911 |
-| Fast 1100mV 85C | 11,216 MHz | +230,842 | +0,250 | +316,432 | +0,599 | +8,944 |
-| Fast 1100mV 0C  | 12,015 MHz | +236,774 | +0,235 | +316,872 | +0,507 | +9,002 |
+| Slow 1100mV 85C | 6,195 MHz | +158,581 | +0,360 | +312,678 | +2,275 | +9,348 |
+| Slow 1100mV 0C  | 5,987 MHz | +152,973 | +0,340 | +313,002 | +2,143 | +9,244 |
+| Fast 1100mV 85C | 12,802 MHz | +241,889 | +0,178 | +315,211 | +1,174 | +9,314 |
+| Fast 1100mV 0C  | 13,727 MHz | +247,150 | +0,166 | +315,816 | +1,037 | +9,289 |
 
 Slacks em nanossegundos. Todos positivos: o projeto fecha timing em todos os
 cantos, e o Timing Analyzer reporta `Design is fully constrained` tanto para
 setup quanto para hold.
 
-O pior canto e o Slow 1100mV 0C, com **Fmax de 5,230 MHz**. O comportamento e
+O pior canto e o Slow 1100mV 0C, com **Fmax de 5,987 MHz**. O comportamento e
 o esperado: setup piora nos cantos lentos, hold piora nos rapidos. O menor
-slack do projeto inteiro e o removal de +0,507 ns no Fast 0C, no caminho do
+slack do projeto inteiro e o removal de +1,037 ns no Fast 0C, no caminho do
 sincronizador de reset ate o clear dos registradores do core. E o numero a
 vigiar caso a frequencia suba.
 
@@ -123,8 +123,38 @@ porque agora ha `derive_clock_uncertainty` aplicando jitter e porque o
 `clk_core` e um clock de fabric numa rede global, com skew real. O numero
 anterior era otimista por omissao, nao melhor.
 
-Utilizacao correspondente: 11.899 de 18.480 ALMs (64%), 41 de 66 blocos DSP
-(62%), 44 de 224 pinos (20%), 676 registradores.
+Utilizacao correspondente: 3.449 de 18.480 ALMs (19%), 8 de 66 blocos DSP
+(12%), 44 de 224 pinos (20%), 677 registradores, 0 de 308 blocos M10K.
+
+Antes da rodada de otimizacao de area eram 11.892 ALMs (64%) e 41 DSPs (62%),
+com Fmax de 5,230 MHz no pior canto. Ver `docs/otimizacao_de_sintese.md`.
+
+## Otimizacao de sintese
+
+`docs/otimizacao_de_sintese.md` documenta uma rodada de otimizacao de area com
+cinco alteracoes de RTL que nao alteram nenhum valor calculado.
+
+| Metrica | Antes | Depois |
+|---|---|---|
+| ALMs | 11.892 (64%) | **3.449 (19%)** |
+| Blocos DSP | 41 (62%) | **8 (12%)** |
+| ALUTs combinacionais | 22.883 | **5.727** |
+| Divisores inferidos | 63 | **9** |
+| Fmax no pior canto | 5,230 MHz | **5,987 MHz** |
+
+O que mudou: `pso_best_tracker_unit` e `pso_random_coeff_unit` passaram a ser
+percorridos em serie, uma particula por ciclo, como o enxame ja era; as catorze
+funcoes de pertinencia viraram uma tabela calculada na elaboracao; `div_trunc`
+deixou de escrever dois operadores `/`; e `age_t` foi estreitado de 16 para 10
+bits.
+
+O ponto de partida era que 78% dos ALUTs estavam dentro de divisores, e 62 das
+63 instancias dividiam por uma constante.
+
+Verificacao: 5 configuracoes de genericos x 3.000 amostras, 0 divergencias
+contra o RTL original, e os arquivos de resultado do experimento saem identicos
+byte a byte. O documento traz o antes e depois de cada alteracao, o uso de
+recursos do dispositivo e como reproduzir cada medicao.
 
 ## Verificacao da refatoracao
 
@@ -143,6 +173,31 @@ Utilizacao correspondente: 11.899 de 18.480 ALMs (64%), 41 de 66 blocos DSP
 - `scripts/gen_results.py`: calcula metricas diarias, resumos mensais e tabelas em CSV/LaTeX.
 - `scripts/gen_plots.py`: gera graficos uteis para analise e relatorio.
 - `scripts/calc_error.py`: analisa o escalonamento do erro e auxilia na escolha de parametros numericos.
+
+## Documentacao
+
+- `docs/guia_de_validacao.md`: passo a passo para validar o RTL do zero --
+  simulacao de equivalencia, sintese, Fitter, STA e geracao do `.sof`. Cada
+  passo traz o comando, a saida esperada e os numeros de referencia.
+- `docs/atribuicao_de_pinos.md`: como definir em quais pinos fisicos cada porta
+  sai, com exemplo para a DE0-CV. **Necessario antes de gravar na placa** -- o
+  projeto hoje tem zero atribuicoes e o Fitter posiciona os 44 pinos
+  automaticamente.
+- `docs/otimizacao_de_sintese.md`: a rodada de otimizacao de area, com o antes e
+  depois de cada alteracao, o uso de recursos do dispositivo e a verificacao.
+- `docs/notas_sintese_e_sta.md`: notas de estudo da refatoracao anterior, da
+  falha de sintese ao fechamento de timing.
+
+Validacao rapida, a partir da raiz do projeto (Quartus e ModelSim ja estao
+no PATH de usuario; ver o Passo 0 do guia se nao estiverem):
+
+```powershell
+.\verification\run_equivalence.ps1 -Samples 3000 -CleanWork   # comportamento
+quartus_map mptt_fuzzy_pso -c mptt_fuzzy_pso                  # sintese
+quartus_fit mptt_fuzzy_pso -c mptt_fuzzy_pso                  # place & route
+quartus_sta -t scripts\run_sta.tcl                            # timing
+quartus_asm mptt_fuzzy_pso -c mptt_fuzzy_pso                  # .sof
+```
 
 ## Como Rodar
 
