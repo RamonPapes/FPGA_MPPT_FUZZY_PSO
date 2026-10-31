@@ -1,75 +1,73 @@
-# Hybrid PSO-Fuzzy MPPT em VHDL
+# Hybrid PSO-Fuzzy MPPT in VHDL
 
-Projeto de implementacao e avaliacao de um controlador MPPT hibrido em VHDL, combinando logica fuzzy, PSO e uma etapa inspirada em Fokker--Planck.
+Implementation and evaluation of a hybrid MPPT controller in VHDL, combining fuzzy logic, Particle Swarm Optimization (PSO), and a Fokker–Planck-inspired stage.
 
-O projeto usa dados historicos pre-processados de tensao e corrente. Portanto, a simulacao atual e em malha aberta: o duty cycle calculado nao altera a potencia medida no dataset. Por isso, a avaliacao prioriza estabilidade do duty cycle, consistencia numerica e comportamento computacional do controlador.
+The project uses preprocessed historical voltage and current data. Therefore, the current simulation operates in an open-loop configuration: the calculated duty cycle does not affect the power measured in the dataset. Consequently, the evaluation focuses on duty-cycle stability, numerical consistency, and the computational behavior of the controller.
 
-Relatorio em desenvolvimento: [Overleaf](https://www.overleaf.com/read/cqjckrcscbzw#d27700).
+## Project Structure
 
-## Estrutura
-
-- `rlt/hybrid_mppt_pkg.vhd`: constantes, tipos, regras fuzzy e funcoes auxiliares.
-- `rlt/mppt_measurement_unit.vhd`: calcula potencia, erro e variacao do erro.
-- `rlt/mppt_fuzzy_ffp_unit.vhd`: calcula a acao fuzzy/Fokker--Planck sobre o duty cycle.
-- `rlt/pso_search_window_unit.vhd`: calcula a janela dinamica de busca do PSO.
-- `rlt/pso_random_coeff_unit.vhd`: gera os coeficientes pseudoaleatorios do enxame.
-- `rlt/pso_particle_update_unit.vhd`: atualiza posicao e velocidade de uma particula.
-- `rlt/pso_swarm_update_unit.vhd`: instancia a atualizacao paralela das particulas.
-- `rlt/pso_best_tracker_unit.vhd`: atualiza `pbest`, `gbest` e a deteccao de queda de potencia.
-- `rlt/hybrid_pso_fuzzy_mppt.vhd`: nucleo do controlador hibrido.
-- `rlt/mppt_top.vhd`: top-level sintetizavel do projeto.
-- `rlt/tb_hybrid_pso_fuzzy_export.vhd`: testbench que le os dados e exporta resultados.
-- `run_experiment.ps1`: script principal de reproducao dos experimentos.
+- `rlt/hybrid_mppt_pkg.vhd`: Constants, types, fuzzy rules, and auxiliary functions.
+- `rlt/mppt_measurement_unit.vhd`: Calculates power, error, and error variation.
+- `rlt/mppt_fuzzy_ffp_unit.vhd`: Computes the fuzzy/Fokker–Planck action on the duty cycle.
+- `rlt/pso_search_window_unit.vhd`: Computes the dynamic PSO search window.
+- `rlt/pso_random_coeff_unit.vhd`: Generates the swarm's pseudorandom coefficients.
+- `rlt/pso_particle_update_unit.vhd`: Updates the position and velocity of a particle.
+- `rlt/pso_swarm_update_unit.vhd`: Instantiates parallel particle updates.
+- `rlt/pso_best_tracker_unit.vhd`: Updates `pbest`, `gbest`, and detects power drops.
+- `rlt/hybrid_pso_fuzzy_mppt.vhd`: Core of the hybrid controller.
+- `rlt/mppt_top.vhd`: Synthesizable top-level module.
+- `rlt/tb_hybrid_pso_fuzzy_export.vhd`: Testbench that reads input data and exports results.
+- `run_experiment.ps1`: Main script for reproducing the experiments.
 
 ## Scripts
 
-- `scripts/pre_process_data.py`: converte os CSVs originais para arquivos de entrada do testbench em ponto fixo.
-- `scripts/optimize_hyperparameters.py`: faz busca exploratoria dos hiperparametros do controlador.
-- `scripts/gen_results.py`: calcula metricas diarias, resumos mensais e tabelas em CSV/LaTeX.
-- `scripts/gen_plots.py`: gera graficos uteis para analise e relatorio.
-- `scripts/calc_error.py`: analisa o escalonamento do erro e auxilia na escolha de parametros numericos.
+- `scripts/pre_process_data.py`: Converts the original CSV files into fixed-point input files for the testbench.
+- `scripts/optimize_hyperparameters.py`: Performs an exploratory search over the controller's hyperparameters.
+- `scripts/gen_results.py`: Computes daily metrics, monthly summaries, and CSV/LaTeX tables.
+- `scripts/gen_plots.py`: Generates plots for analysis and reporting.
+- `scripts/calc_error.py`: Analyzes error scaling and assists in selecting numerical parameters.
 
-## Como Rodar
+## How to Run
 
-Experimento completo (pre-processamento, otimizacao, simulacao, metricas, graficos e analise de erro):
+Full experiment (preprocessing, optimization, simulation, metrics, plots, and error analysis):
 
 ```powershell
 .\run_experiment.ps1 -ArchiveDir archive_final -ResultsDir results_final -CleanWork
 ```
 
-Para pular a otimizacao e usar os parametros atuais:
+To skip optimization and use the current parameters:
 
 ```powershell
 .\run_experiment.ps1 -ArchiveDir archive_final -ResultsDir results_final -CleanWork -SkipOptimization
 ```
 
-Por padrao, as simulacoes rodam sequencialmente (`-MaxParallel 1`). Isso evita erro de checkout em licencas Questa/ModelSim Starter uncounted node-locked, que normalmente permitem apenas uma sessao por vez. Use `-MaxParallel` maior que 1 apenas se a sua licenca permitir multiplas sessoes simultaneas.
+By default, simulations run sequentially (`-MaxParallel 1`). This prevents license checkout errors with Questa/ModelSim Starter uncounted node-locked licenses, which typically allow only one active session at a time. Use a `-MaxParallel` value greater than 1 only if your license permits multiple concurrent sessions.
 
-Para recalcular apenas metricas e tabelas a partir dos resultados ja simulados:
+To recompute only the metrics and tables from previously generated simulation results:
 
 ```powershell
 python .\scripts\gen_results.py --results-dir results_final
 python .\scripts\gen_plots.py --results-dir results_final --output-dir results_final\graficos_uteis
 ```
 
-## Saidas
+## Outputs
 
-- `results_final/*_results.txt`: resultados exportados pelo testbench.
-- `results_final/*_daily_metrics.csv`: metricas diarias por mes.
-- `results_final/metrics_daily_all.csv`: metricas diarias consolidadas.
-- `results_final/metrics_general.csv`: medias e desvios padrao mensais.
-- `results_final/tabelas_metricas_por_dia/`: tabelas por dia em CSV e LaTeX.
-- `results_final/graficos_uteis/`: graficos gerados para analise.
+- `results_final/*_results.txt`: Results exported by the testbench.
+- `results_final/*_daily_metrics.csv`: Daily metrics for each month.
+- `results_final/metrics_daily_all.csv`: Consolidated daily metrics.
+- `results_final/metrics_general.csv`: Monthly means and standard deviations.
+- `results_final/tabelas_metricas_por_dia/`: Daily tables in CSV and LaTeX formats.
+- `results_final/graficos_uteis/`: Plots generated for analysis.
 
-## Metricas Principais
+## Main Metrics
 
-- `P_best_final`: maior potencia observada no dia.
-- `N_conv_98`: amostras ate atingir 98% da melhor potencia diaria.
-- `T_conv_98_seconds`: tempo ate atingir 98% da melhor potencia diaria.
-- `duty_std_after_conv`: desvio padrao do duty de controle apos convergencia.
-- `P_ripple_after_conv`: oscilacao da potencia apos convergencia.
-- `mean_abs_error`: erro medio absoluto ao longo do dia.
+- `P_best_final`: Maximum power observed during the day.
+- `N_conv_98`: Number of samples required to reach 98% of the day's maximum observed power.
+- `T_conv_98_seconds`: Time required to reach 98% of the day's maximum observed power.
+- `duty_std_after_conv`: Standard deviation of the control duty cycle after convergence.
+- `P_ripple_after_conv`: Power fluctuations after convergence.
+- `mean_abs_error`: Mean absolute error throughout the day.
 
-## Referencias
+## References
 
 PATNAIK, Bhabani; SWAIN, Sarat Chandra; DASH, Ritesh; BALLAJI, Adithya. *Design and analysis of MPPT using advanced PSO based on fuzzy Fokker-Planck solution under partial shading condition*. SMART GENCON, 2022.
