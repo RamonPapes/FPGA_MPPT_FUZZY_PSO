@@ -22,7 +22,8 @@ entity mppt_fpga_top is
     generic (
         -- Divisao do oscilador da placa para gerar o clock do core. Deve ser
         -- par e precisa bater com a variavel CLK_DIV do mptt_fuzzy_pso.sdc.
-        -- 50 MHz / 16 = 3,125 MHz, contra um Fmax de 5,63 MHz no pior canto.
+        -- 50 MHz / 16 = 3,125 MHz, contra um Fmax de 5,779 MHz no pior canto
+        -- (Slow 1100mV 0C, results_final/sta/sta_summary.csv).
         CLK_DIV_G         : positive := 16;
 
         -- Hiperparametros: melhor configuracao de

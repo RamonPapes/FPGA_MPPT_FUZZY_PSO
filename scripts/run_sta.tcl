@@ -70,28 +70,38 @@ proc fmt {v} {
     return [format "%.3f" $v]
 }
 
-# Pior slack de largura minima de pulso.
+# Pior slack de largura minima de pulso, POR CLOCK.
 #
 # Nao existe get_timing_paths para essa checagem, e a API de paineis
 # (get_report_panel_id) exige o banco de relatorios carregado, o que nao
-# acontece sob "quartus_sta -t". Entao a tabela e gerada em arquivo e o
-# primeiro valor numerico da coluna Slack e extraido dela.
-proc mpw_worst_slack {tmp_file} {
+# acontece sob "quartus_sta -t". Entao a tabela e gerada em arquivo e lida
+# linha a linha. As colunas sao:
+#   Slack ; Actual Width ; Required Width ; Type ; Clock ; Clock Edge ; Target
+# Devolve uma lista no formato de "array set": clock -> menor slack.
+#
+# report_min_pulse_width nao filtra por clock. Antes, o primeiro valor da
+# tabela (o pior global, sempre do clk_osc) era repetido em todas as linhas,
+# o que atribuia ao clk_core o MPW do clk_osc.
+proc mpw_worst_slack_per_clock {tmp_file} {
+    array set worst {}
+
     if {[catch {
         set fh [open $tmp_file r]
         set txt [read $fh]
         close $fh
     }]} {
-        return "n/a"
+        return [array get worst]
     }
 
     foreach line [split $txt "\n"] {
-        if {[regexp {^;\s*(-?[0-9]+\.[0-9]+)\s*;} $line -> value]} {
-            return $value
+        if {[regexp {^;\s*(-?[0-9]+\.[0-9]+)\s*;[^;]*;[^;]*;[^;]*;\s*([^;\s]+)\s*;} $line -> value clk]} {
+            if {![info exists worst($clk)] || $value < $worst($clk)} {
+                set worst($clk) $value
+            }
         }
     }
 
-    return "n/a"
+    return [array get worst]
 }
 
 # ----------------------------------------------------------------------
@@ -140,12 +150,13 @@ foreach_in_collection oc [get_available_operating_conditions] {
 
     post_message -type info "=== Canto: $corner"
 
-    # Largura minima de pulso: valor global do canto, repetido em cada linha
-    # de clock. O detalhamento por clock esta no relatorio de texto.
+    # Largura minima de pulso: pior slack de cada clock. -nworst grande para
+    # que todos os alvos entrem na tabela e cada clock tenha o seu minimo.
     set mpw_tmp [file join $out_dir "_mpw_tmp.txt"]
     file delete -force $mpw_tmp
-    catch {report_min_pulse_width -nworst 1 -file $mpw_tmp}
-    set mpw_slack [mpw_worst_slack $mpw_tmp]
+    catch {report_min_pulse_width -nworst 100000 -file $mpw_tmp}
+    array unset mpw_by_clock
+    array set mpw_by_clock [mpw_worst_slack_per_clock $mpw_tmp]
     file delete -force $mpw_tmp
 
     # Uma linha por clock. Os slacks sao filtrados por dominio com -to_clock,
@@ -171,6 +182,12 @@ foreach_in_collection oc [get_available_operating_conditions] {
         set c_recovery [worst_slack [get_timing_paths -recovery -npaths 1 -detail summary -to_clock $ck]]
         set c_removal  [worst_slack [get_timing_paths -removal  -npaths 1 -detail summary -to_clock $ck]]
 
+        if {[info exists mpw_by_clock($cname)]} {
+            set mpw_slack $mpw_by_clock($cname)
+        } else {
+            set mpw_slack "n/a"
+        }
+
         set target [format "%.3f" [expr {1000.0 / $period}]]
 
         if {$c_setup eq "n/a" || $period <= $c_setup} {
@@ -181,7 +198,7 @@ foreach_in_collection oc [get_available_operating_conditions] {
 
         puts $summary_csv "$corner,$cname,[format %.3f $period],$target,[fmt $c_setup],$fmax,[fmt $c_hold],[fmt $c_recovery],[fmt $c_removal],[fmt $mpw_slack]"
 
-        foreach s [list $c_setup $c_hold $c_recovery $c_removal] {
+        foreach s [list $c_setup $c_hold $c_recovery $c_removal $mpw_slack] {
             if {$s ne "n/a" && $s < 0} {
                 set any_violation 1
             }
@@ -205,10 +222,6 @@ foreach_in_collection oc [get_available_operating_conditions] {
 
             puts $paths_csv "$corner,$cname,$rank,[fmt $slack],\"$from\",\"$to\""
         }
-    }
-
-    if {$mpw_slack ne "n/a" && $mpw_slack < 0} {
-        set any_violation 1
     }
 
     # Relatorio completo deste canto, acumulado no mesmo arquivo.

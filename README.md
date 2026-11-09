@@ -99,40 +99,52 @@ contador do divisor, escondendo o caminho critico do controlador.
 ### Resultados
 
 Compilacao no 5CEBA4F23C7, Quartus Prime Lite 20.1.1, com o core em
-3,125 MHz (`CLK_DIV_G = 16`):
+3,125 MHz (`CLK_DIV_G = 16`) e os hiperparametros otimizados nos generics de
+`mppt_fpga_top` (os mesmos de `results_final/optimization_runs/optimization_final_best.csv`
+e dos defaults de `run_experiment.ps1`):
 
-| Canto | Fmax `clk_core` | Setup | Hold | Recovery | Removal | MPW |
+| Canto | Fmax `clk_core` | Setup | Hold | Recovery | Removal | MPW `clk_core` |
 |---|---|---|---|---|---|---|
-| Slow 1100mV 85C | 6,195 MHz | +158,581 | +0,360 | +312,678 | +2,275 | +9,348 |
-| Slow 1100mV 0C  | 5,987 MHz | +152,973 | +0,340 | +313,002 | +2,143 | +9,244 |
-| Fast 1100mV 85C | 12,802 MHz | +241,889 | +0,178 | +315,211 | +1,174 | +9,314 |
-| Fast 1100mV 0C  | 13,727 MHz | +247,150 | +0,166 | +315,816 | +1,037 | +9,289 |
+| Slow 1100mV 85C | 5,991 MHz | +153,087 | +0,400 | +315,074 | +1,062 | +158,913 |
+| Slow 1100mV 0C  | 5,779 MHz | +146,963 | +0,381 | +315,348 | +0,928 | +158,958 |
+| Fast 1100mV 85C | 12,455 MHz | +239,714 | +0,133 | +316,884 | +0,436 | +159,268 |
+| Fast 1100mV 0C  | 13,346 MHz | +245,073 | +0,107 | +317,245 | +0,387 | +159,373 |
 
-Slacks em nanossegundos. Todos positivos: o projeto fecha timing em todos os
-cantos, e o Timing Analyzer reporta `Design is fully constrained` tanto para
-setup quanto para hold.
+Slacks em nanossegundos, dominio `clk_core`. Todos positivos: o projeto fecha
+timing em todos os cantos, e o Timing Analyzer reporta `Design is fully
+constrained` tanto para setup quanto para hold. O MPW e o pior de cada clock
+(o `clk_osc` fica entre +9,022 e +9,082 ns).
 
-O pior canto e o Slow 1100mV 0C, com **Fmax de 5,987 MHz**. O comportamento e
-o esperado: setup piora nos cantos lentos, hold piora nos rapidos. O menor
-slack do projeto inteiro e o removal de +1,037 ns no Fast 0C, no caminho do
-sincronizador de reset ate o clear dos registradores do core. E o numero a
-vigiar caso a frequencia suba.
+O pior canto e o Slow 1100mV 0C, com **Fmax de 5,779 MHz**, no caminho
+`prev_voltage` -> `pno_candidate` (medicao, fuzzy, Fokker-Planck e P&O num
+unico ciclo). O comportamento e o esperado: setup piora nos cantos lentos,
+hold piora nos rapidos. O menor slack do projeto inteiro e o hold de +0,107 ns
+no Fast 0C, nos registradores `particle_vel`; o menor removal e +0,387 ns, no
+caminho do sincronizador de reset ate o clear dos registradores do core. Sao
+os numeros a vigiar caso a frequencia suba.
 
 Antes de existir SDC, o Quartus reportava 5,63 MHz. O valor atual e menor
 porque agora ha `derive_clock_uncertainty` aplicando jitter e porque o
 `clk_core` e um clock de fabric numa rede global, com skew real. O numero
 anterior era otimista por omissao, nao melhor.
 
-Utilizacao correspondente: 3.449 de 18.480 ALMs (19%), 8 de 66 blocos DSP
-(12%), 44 de 224 pinos (20%), 677 registradores, 0 de 308 blocos M10K.
+Utilizacao correspondente: 3.645 de 18.480 ALMs (20%), 10 de 66 blocos DSP
+(15%), 44 de 224 pinos (20%), 692 registradores, 0 de 308 blocos M10K.
 
-Antes da rodada de otimizacao de area eram 11.892 ALMs (64%) e 41 DSPs (62%),
-com Fmax de 5,230 MHz no pior canto. Ver `docs/otimizacao_de_sintese.md`.
+Os generics viram constantes na sintese, entao trocar hiperparametros muda a
+area e o timing. Com a configuracao anterior de generics (W=70, C1=60, C2=60,
+deteccao de queda desligada), o mesmo RTL dava 3.449 ALMs, 8 DSPs e
+5,987 MHz. Na configuracao atual, por exemplo, a logica de deteccao de queda
+deixa de ser eliminada por propagacao de constante. Antes da rodada de otimizacao de area eram
+11.892 ALMs (64%) e 41 DSPs (62%), com Fmax de 5,230 MHz no pior canto. Ver
+`docs/otimizacao_de_sintese.md`.
 
 ## Otimizacao de sintese
 
 `docs/otimizacao_de_sintese.md` documenta uma rodada de otimizacao de area com
-cinco alteracoes de RTL que nao alteram nenhum valor calculado.
+cinco alteracoes de RTL que nao alteram nenhum valor calculado. A comparacao
+abaixo usa a configuracao de generics da epoca (W=70, C1=60, C2=60); os
+numeros do build atual estao na secao anterior.
 
 | Metrica | Antes | Depois |
 |---|---|---|
