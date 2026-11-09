@@ -1,0 +1,7 @@
+sim/work/
+sim/transcript
+sim/*.wlf
+sim/*.o
+sim/*.log
+sim/uvm_dpi.dll
+resultados/
