@@ -20,10 +20,11 @@ VHDL_FILES = [
     "rlt/pso_search_window_unit.vhd",
     "rlt/pso_random_coeff_unit.vhd",
     "rlt/pso_particle_update_unit.vhd",
-    "rlt/pso_swarm_update_unit.vhd",
     "rlt/pso_best_tracker_unit.vhd",
     "rlt/hybrid_pso_fuzzy_mppt.vhd",
     "rlt/mppt_top.vhd",
+    "rlt/mppt_clock_reset_unit.vhd",
+    "rlt/mppt_fpga_top.vhd",
     "rlt/tb_hybrid_pso_fuzzy_export.vhd",
 ]
 
@@ -375,6 +376,33 @@ def run_trials(
     return pd.DataFrame(rows)
 
 
+def rank_results(ok: pd.DataFrame) -> pd.DataFrame:
+    """Ordena os trials por score com desempate deterministico.
+
+    Em malha aberta o score so depende dos parametros do caminho
+    fuzzy/Fokker-Planck/P&O: control_duty (pno_candidate) nao le o estado do
+    PSO, e as medicoes nao dependem do duty aplicado. Por isso configuracoes
+    que diferem apenas em parametros de PSO/memoria empatam exatamente.
+
+    O desempate antes dependia da ordem das linhas e do algoritmo de
+    ordenacao (sort_values sem kind), o que mudou o vencedor entre versoes do
+    pandas. Regra atual, com ordenacao estavel:
+      1. score, decrescente;
+      2. ENABLE_CHANGE_DETECTION, crescente (prefere o hardware mais simples,
+         sem a logica de deteccao de queda);
+      3. trial, crescente.
+    """
+    keys = ["score"]
+    ascending = [False]
+
+    for key, asc in (("ENABLE_CHANGE_DETECTION_G_TB", True), ("trial", True)):
+        if key in ok.columns:
+            keys.append(key)
+            ascending.append(asc)
+
+    return ok.sort_values(keys, ascending=ascending, kind="stable")
+
+
 def save_ranked_results(df: pd.DataFrame, out_dir: Path, prefix: str, top_n: int = 20) -> pd.DataFrame:
     out_dir.mkdir(parents=True, exist_ok=True)
     out_csv = out_dir / f"{prefix}_results.csv"
@@ -388,7 +416,7 @@ def save_ranked_results(df: pd.DataFrame, out_dir: Path, prefix: str, top_n: int
         print(f"Nenhum resultado OK em {prefix}.")
         return ok
 
-    ok = ok.sort_values("score", ascending=False)
+    ok = rank_results(ok)
     ok.head(top_n).to_csv(best_csv, index=False)
 
     print(f"\nTop 10 - {prefix}:")

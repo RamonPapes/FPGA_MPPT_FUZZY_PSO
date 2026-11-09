@@ -1,0 +1,10 @@
+# Dependencias dos scripts em scripts/ (pre-processamento, otimizacao,
+# metricas, graficos e analise de erro). Versoes validadas com Python 3.14.5
+# na rodada que reproduziu as tabelas do artigo.
+#
+#   python -m venv .venv
+#   .venv\Scripts\python -m pip install -r requirements.txt
+#   .\run_experiment.ps1 ... -PythonExe .venv\Scripts\python.exe
+pandas==3.1.1
+numpy==2.5.4
+matplotlib==3.11.2

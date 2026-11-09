@@ -32,30 +32,31 @@ param(
     [switch]$CleanWork,
 
     [int]$SETTLE_CYCLES_G = 1,
-    [int]$W_PSO_G_TB = 70,
-    [int]$C1_PSO_G_TB = 60,
-    [int]$C2_PSO_G_TB = 60,
+    # Defaults = optimization_final_best.csv (mesmos valores de rlt/mppt_fpga_top.vhd)
+    [int]$W_PSO_G_TB = 30,
+    [int]$C1_PSO_G_TB = 30,
+    [int]$C2_PSO_G_TB = 50,
     [int]$RHO_MIN_G_TB = 55,
     [int]$RHO_MAX_G_TB = 65,
-    [int]$VEL_MIN_G_TB = -20,
-    [int]$VEL_MAX_G_TB = 20,
-    [int]$DEADZONE_G_TB = 1,
-    [int]$SEARCH_RADIUS_G_TB = 10,
+    [int]$VEL_MIN_G_TB = -30,
+    [int]$VEL_MAX_G_TB = 10,
+    [int]$DEADZONE_G_TB = 3,
+    [int]$SEARCH_RADIUS_G_TB = 6,
     [int]$FOKKER_STEP_MIN_G_TB = 1,
-    [int]$FOKKER_STEP_MAX_G_TB = 4,
-    [int]$FUZZY_STEP_G_TB = 40,
+    [int]$FOKKER_STEP_MAX_G_TB = 12,
+    [int]$FUZZY_STEP_G_TB = 30,
     [int]$FUZZY_EDGE_G_TB = 100,
     [int]$POWER_SCALE_DEN_G_TB = 65536,
     [int]$ERROR_GAIN_G_TB = 1,
     [int]$DELTA_V_MIN_G_TB = 16,
-    [int]$DUTY_DIRECTION_G_TB = 1,
-    [int]$SEARCH_CENTER_MODE_G_TB = 2,
+    [int]$DUTY_DIRECTION_G_TB = -1,
+    [int]$SEARCH_CENTER_MODE_G_TB = 1,
     [int]$RESET_ON_DATE_CHANGE_G_TB = 0,
-    [int]$MEMORY_HALF_LIFE_G_TB = 300,
+    [int]$MEMORY_HALF_LIFE_G_TB = 450,
     [int]$MAX_PBEST_AGE_G_TB = 500,
     [int]$ENABLE_CHANGE_DETECTION_G_TB = 0,
-    [int]$DROP_THRESHOLD_PERCENT_G_TB = 70,
-    [int]$DROP_PATIENCE_G_TB = 30
+    [int]$DROP_THRESHOLD_PERCENT_G_TB = 60,
+    [int]$DROP_PATIENCE_G_TB = 20
 )
 
 $ErrorActionPreference = "Stop"
@@ -142,10 +143,11 @@ $VhdlFiles = @(
     "pso_search_window_unit.vhd",
     "pso_random_coeff_unit.vhd",
     "pso_particle_update_unit.vhd",
-    "pso_swarm_update_unit.vhd",
     "pso_best_tracker_unit.vhd",
     "hybrid_pso_fuzzy_mppt.vhd",
     "mppt_top.vhd",
+    "mppt_clock_reset_unit.vhd",
+    "mppt_fpga_top.vhd",
     "tb_hybrid_pso_fuzzy_export.vhd"
 )
 

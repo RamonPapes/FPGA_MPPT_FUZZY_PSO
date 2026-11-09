@@ -9,9 +9,9 @@ entity pso_search_window_unit is
         SEARCH_RADIUS_G : integer := 12
     );
     port (
-        search_center_in : in  integer;
-        search_low_out   : out integer;
-        search_high_out  : out integer
+        search_center_in : in  duty_t;
+        search_low_out   : out duty_t;
+        search_high_out  : out duty_t
     );
 end pso_search_window_unit;
 

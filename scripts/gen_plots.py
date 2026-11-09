@@ -140,12 +140,12 @@ def plot_day_inputs_and_fuzzy(
     }
 
     axes[0].plot(x, voltage, color="blue", **tcc_line_style)
-    axes[0].set_title("Input - Vpv")
+    axes[0].set_title("Input voltage (microgrid LV AC bus, MG-LV-MSB)")
     axes[0].set_ylabel("Voltage (V)")
 
     axes[1].plot(x, current, color="red", **tcc_line_style)
-    axes[1].set_title("Input - Ipv")
-    axes[1].set_ylabel("Current (p.u.)")
+    axes[1].set_title("Derived current I = P_PV / V_AC")
+    axes[1].set_ylabel("Current (p.u., monthly base)")
 
     axes[2].plot(x, day_df["error"], color="magenta", **tcc_line_style)
     axes[2].set_title("Error (dP/dV)")
@@ -153,7 +153,7 @@ def plot_day_inputs_and_fuzzy(
     axes[2].set_ylim(-110, 110)
 
     axes[3].plot(x, day_df["delta_e"], color="cyan", **tcc_line_style)
-    axes[3].set_title("CE (dE)")
+    axes[3].set_title("Change of error (dE)")
     axes[3].set_ylabel("CE")
     axes[3].set_xlabel("Samples")
     axes[3].set_ylim(-110, 110)
@@ -192,9 +192,9 @@ def plot_day_inputs_and_fuzzy(
         linewidth=1.0,
         drawstyle="steps-post",
     )
-    ax.set_title(f"DUTY CYCLE (Day {int(duty_title_day)})")
+    ax.set_title(f"Refined duty candidate, control_duty (day {int(duty_title_day)})")
     ax.set_xlabel("Samples")
-    ax.set_ylabel("Duty Cycle (%)")
+    ax.set_ylabel("control_duty (%)")
     ax.grid(True, color="0.75", linewidth=0.5, alpha=0.6)
     ax.tick_params(direction="in", top=True, right=True)
 
@@ -209,7 +209,7 @@ def plot_day_inputs_and_fuzzy(
     if "gbest_power" in day_df.columns:
         ax.plot(x, day_df["gbest_power"], linewidth=1, alpha=0.75, label="gbest power")
         ax.legend()
-    ax.set_title(f"Power - {target_date}")
+    ax.set_title(f"Scaled input power and internal gbest - {target_date}")
     ax.set_xlabel("Samples")
     ax.set_ylabel("Scaled power")
     ax.grid(True)
@@ -260,56 +260,56 @@ def plot_monthly_comparisons(general_df: pd.DataFrame, output_dir: Path) -> None
         (
             "P_best_final_mean",
             "P_best_final_std",
-            "Potencia maxima diaria do historico",
+            "Daily maximum scaled input power",
             "Scaled power",
             "monthly_p_best_final.png",
         ),
         (
             "N_conv_duty_stable_mean",
             "N_conv_duty_stable_std",
-            "Amostras ate estabilidade do duty",
+            "Samples until duty stabilization",
             "Samples",
             "monthly_n_conv_duty_stable.png",
         ),
         (
             "T_conv_duty_stable_seconds_mean",
             "T_conv_duty_stable_seconds_std",
-            "Tempo ate estabilidade do duty",
+            "Time until duty stabilization",
             "Seconds",
             "monthly_t_conv_duty_stable_seconds.png",
         ),
         (
             "duty_std_after_stable_mean",
             "duty_std_after_stable_std",
-            "Oscilacao do duty apos estabilidade",
+            "Duty standard deviation after stabilization",
             "Duty standard deviation",
             "monthly_duty_std_after_stable.png",
         ),
         (
             "duty_step_mean_after_stable_mean",
             "duty_step_mean_after_stable_std",
-            "Passo medio do duty apos estabilidade",
+            "Mean duty step after stabilization",
             "Mean absolute duty step",
             "monthly_duty_step_mean_after_stable.png",
         ),
         (
             "duty_saturation_after_stable_percent_mean",
             "duty_saturation_after_stable_percent_std",
-            "Saturacao do duty apos estabilidade",
+            "Duty saturation after stabilization",
             "Percent",
             "monthly_duty_saturation_after_stable.png",
         ),
         (
             "stability_score_mean",
             "stability_score_std",
-            "Score de estabilidade do controlador",
+            "Controller stability score",
             "Score",
             "monthly_stability_score.png",
         ),
         (
             "mean_abs_error_mean",
             "mean_abs_error_std",
-            "Erro absoluto medio por mes",
+            "Mean absolute internal error by month",
             "Mean absolute error",
             "monthly_mean_abs_error.png",
         ),
@@ -330,21 +330,21 @@ def plot_monthly_comparisons(general_df: pd.DataFrame, output_dir: Path) -> None
         (
             "N_conv_98_mean",
             "N_conv_98_std",
-            "Amostras ate 98% da melhor potencia historica",
+            "Samples until 98% of the daily maximum input power",
             "Samples",
             "legacy_monthly_n_conv_98.png",
         ),
         (
             "duty_std_after_conv_mean",
             "duty_std_after_conv_std",
-            "Oscilacao do duty apos 98% da potencia historica",
+            "Duty standard deviation after the 98% power threshold",
             "Duty standard deviation",
             "legacy_monthly_duty_std_after_conv.png",
         ),
         (
             "P_ripple_after_conv_mean",
             "P_ripple_after_conv_std",
-            "Variacao historica de potencia apos 98%",
+            "Input power standard deviation after the 98% threshold",
             "Power standard deviation",
             "legacy_monthly_power_ripple_after_conv.png",
         ),
@@ -370,7 +370,7 @@ def plot_score_like_monthly_summary(general_df: pd.DataFrame, output_dir: Path) 
             df["month"].astype(str),
             pd.to_numeric(df["stability_score_mean"], errors="coerce"),
         )
-        ax.set_title("Resumo comparativo de estabilidade por mes")
+        ax.set_title("Monthly stability summary")
         ax.set_ylabel("Stability score")
         ax.set_xlabel("Month")
         ax.tick_params(axis="x", rotation=45)
@@ -400,8 +400,8 @@ def plot_score_like_monthly_summary(general_df: pd.DataFrame, output_dir: Path) 
 
     fig, ax = plt.subplots(figsize=(11, 5))
     ax.bar(df["month"].astype(str), df["stability_score_like"])
-    ax.set_title("Resumo comparativo de estabilidade por mes")
-    ax.set_ylabel("Score relativo")
+    ax.set_title("Monthly stability summary")
+    ax.set_ylabel("Relative score")
     ax.set_xlabel("Month")
     ax.tick_params(axis="x", rotation=45)
 
@@ -412,16 +412,16 @@ def plot_score_like_monthly_summary(general_df: pd.DataFrame, output_dir: Path) 
 
 def plot_daily_metric_lines(daily_df: pd.DataFrame, output_dir: Path) -> None:
     metrics = [
-        ("P_best_final", "Potencia maxima diaria escalada", "Scaled power", "daily_p_best_final_by_month.png"),
-        ("T_conv_duty_stable_seconds", "Tempo diario ate estabilidade do duty", "Seconds", "daily_t_conv_duty_stable_by_month.png"),
-        ("N_conv_duty_stable", "Amostras ate estabilidade do duty", "Samples", "daily_n_conv_duty_stable_by_month.png"),
-        ("duty_std_after_stable", "Oscilacao diaria do duty apos estabilidade", "Duty standard deviation", "daily_duty_std_after_stable_by_month.png"),
-        ("duty_step_mean_after_stable", "Passo medio diario do duty apos estabilidade", "Mean absolute duty step", "daily_duty_step_mean_after_stable_by_month.png"),
-        ("duty_saturation_after_stable_percent", "Saturacao diaria do duty apos estabilidade", "Percent", "daily_duty_saturation_after_stable_by_month.png"),
-        ("stability_score", "Score diario de estabilidade", "Score", "daily_stability_score_by_month.png"),
-        ("mean_abs_error", "Erro absoluto medio diario", "Mean absolute error", "daily_mean_abs_error_by_month.png"),
-        ("gbest_consistency_violations", "Violacoes diarias de consistencia do gbest", "Count", "daily_gbest_consistency_violations.png"),
-        ("gbest_monotonic_violations", "Violacoes diarias de monotonicidade do gbest", "Count", "daily_gbest_monotonic_violations.png"),
+        ("P_best_final", "Daily maximum scaled input power", "Scaled power", "daily_p_best_final_by_month.png"),
+        ("T_conv_duty_stable_seconds", "Daily time until duty stabilization", "Seconds", "daily_t_conv_duty_stable_by_month.png"),
+        ("N_conv_duty_stable", "Samples until duty stabilization", "Samples", "daily_n_conv_duty_stable_by_month.png"),
+        ("duty_std_after_stable", "Daily duty standard deviation after stabilization", "Duty standard deviation", "daily_duty_std_after_stable_by_month.png"),
+        ("duty_step_mean_after_stable", "Daily mean duty step after stabilization", "Mean absolute duty step", "daily_duty_step_mean_after_stable_by_month.png"),
+        ("duty_saturation_after_stable_percent", "Daily duty saturation after stabilization", "Percent", "daily_duty_saturation_after_stable_by_month.png"),
+        ("stability_score", "Daily stability score", "Score", "daily_stability_score_by_month.png"),
+        ("mean_abs_error", "Daily mean absolute internal error", "Mean absolute error", "daily_mean_abs_error_by_month.png"),
+        ("gbest_consistency_violations", "Daily gbest consistency violations", "Count", "daily_gbest_consistency_violations.png"),
+        ("gbest_monotonic_violations", "Daily gbest monotonicity violations", "Count", "daily_gbest_monotonic_violations.png"),
     ]
 
     for metric, title, ylabel, filename in metrics:
@@ -455,12 +455,12 @@ def plot_tradeoff_scatter(general_df: pd.DataFrame, output_dir: Path) -> None:
         x_col = "T_conv_duty_stable_seconds_mean"
         y_col = "duty_std_after_stable_mean"
         filename = "tradeoff_duty_convergence_vs_stability.png"
-        title = "Trade-off: convergencia do duty vs estabilidade"
+        title = "Trade-off: duty stabilization time vs. stability"
     else:
         x_col = "T_conv_98_seconds_mean"
         y_col = "duty_std_after_conv_mean"
         filename = "tradeoff_convergence_vs_duty_stability.png"
-        title = "Trade-off: tempo de convergencia vs estabilidade do duty"
+        title = "Trade-off: 98% threshold time vs. duty stability"
 
     required = {"month", x_col, y_col}
 
