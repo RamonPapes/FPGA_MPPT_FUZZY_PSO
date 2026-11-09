@@ -39,13 +39,7 @@ vsim.wlf
 # dos CSVs em archive_final/ e chegam a centenas de milhares de linhas.
 # Reproduzem-se com run_experiment.ps1.
 # -------------------------------------
-dados_pre_processados/
-results/dados_pre_processados/
-optimization_runs/
-results/optimization_runs/
 graficos_uteis/
-results/graficos_uteis/
-results_final/graficos_uteis/
 *_results.txt
 *_dataset.txt
 dataset_scaled.txt

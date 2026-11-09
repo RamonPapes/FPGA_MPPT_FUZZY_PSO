@@ -25,30 +25,35 @@ entity mppt_fpga_top is
         -- 50 MHz / 16 = 3,125 MHz, contra um Fmax de 5,63 MHz no pior canto.
         CLK_DIV_G         : positive := 16;
 
+        -- Hiperparametros: melhor configuracao de
+        -- results_final/optimization_runs/optimization_final_best.csv
+        -- (optimize_hyperparameters.py, stage both, Apr/2023 5 dias, seed 42,
+        -- score -2.6054), mantida igual aos defaults do run_experiment.ps1.
+        -- SETTLE_CYCLES fica em 1000 no hardware; a simulacao usa 1.
         SETTLE_CYCLES     : integer := 1000;
-        W_PSO_G           : integer := 70;
-        C1_PSO_G          : integer := 60;
-        C2_PSO_G          : integer := 60;
-        RHO_MIN_G         : integer := 55;
+        W_PSO_G           : integer := 30;
+        C1_PSO_G          : integer := 30;
+        C2_PSO_G          : integer := 50;
+        RHO_MIN_G         : integer := 53;
         RHO_MAX_G         : integer := 65;
         VEL_MIN_G         : integer := -20;
-        VEL_MAX_G         : integer := 20;
-        DEADZONE_G        : integer := 1;
-        SEARCH_RADIUS_G   : integer := 10;
+        VEL_MAX_G         : integer := 10;
+        DEADZONE_G        : integer := 3;
+        SEARCH_RADIUS_G   : integer := 6;
         FOKKER_STEP_MIN_G : integer := 1;
-        FOKKER_STEP_MAX_G : integer := 4;
-        FUZZY_STEP_G      : integer := 40;
+        FOKKER_STEP_MAX_G : integer := 12;
+        FUZZY_STEP_G      : integer := 30;
         FUZZY_EDGE_G      : integer := 100;
         POWER_SCALE_DEN_G : integer := 65536;
         ERROR_GAIN_G      : integer := 1;
         DELTA_V_MIN_G     : integer := 16;
-        DUTY_DIRECTION_G  : integer := 1;
-        SEARCH_CENTER_MODE_G : integer := 2;
+        DUTY_DIRECTION_G  : integer := -1;
+        SEARCH_CENTER_MODE_G : integer := 1;
         MEMORY_HALF_LIFE_G : integer := 300;
-        MAX_PBEST_AGE_G : integer := 500;
-        ENABLE_CHANGE_DETECTION_G : integer := 0;
-        DROP_THRESHOLD_PERCENT_G : integer := 70;
-        DROP_PATIENCE_G : integer := 30
+        MAX_PBEST_AGE_G : integer := 1000;
+        ENABLE_CHANGE_DETECTION_G : integer := 1;
+        DROP_THRESHOLD_PERCENT_G : integer := 60;
+        DROP_PATIENCE_G : integer := 20
     );
     port (
         clk         : in  std_logic;   -- oscilador da placa, 50 MHz
