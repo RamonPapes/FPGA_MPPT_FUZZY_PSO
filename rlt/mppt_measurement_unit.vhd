@@ -29,8 +29,11 @@ end mppt_measurement_unit;
 architecture Behavioral of mppt_measurement_unit is
 
     -- Produto bruto tensao x corrente, antes do reescalonamento. Dois
-    -- operandos de 16 bits com sinal cabem em 31 bits.
-    subtype raw_power_t is integer range -(2 ** 30) to (2 ** 30) - 1;
+    -- operandos de 16 bits com sinal vao de -32768 * 32767 = -(2**30) + 32768
+    -- ate (-32768) * (-32768) = +2**30. O limite superior precisa incluir
+    -- 2**30: com (2**30) - 1, I = V = -32768 abortava a simulacao (vsim-3421)
+    -- e, em hardware, o produto virava negativo. Exige 32 bits com sinal.
+    subtype raw_power_t is integer range -(2 ** 30) to (2 ** 30);
 
     -- Numerador do quociente dP/dV depois do ganho. Cobre ERROR_GAIN_G ate
     -- 255 com delta_p no pior caso.

@@ -22,22 +22,26 @@ entity mppt_fpga_top is
     generic (
         -- Divisao do oscilador da placa para gerar o clock do core. Deve ser
         -- par e precisa bater com a variavel CLK_DIV do mptt_fuzzy_pso.sdc.
-        -- 50 MHz / 16 = 3,125 MHz, contra um Fmax de 5,779 MHz no pior canto
-        -- (Slow 1100mV 0C, results_final/sta/sta_summary.csv).
+        -- 50 MHz / 16 = 3,125 MHz. O Fmax do pior canto esta em
+        -- results_final/sta/sta_summary.csv (gerado por scripts/run_sta.tcl).
         CLK_DIV_G         : positive := 16;
 
-        -- Hiperparametros: melhor configuracao de
+        -- Hiperparametros: primeira linha de
         -- results_final/optimization_runs/optimization_final_best.csv
-        -- (optimize_hyperparameters.py, stage both, Apr/2023 5 dias, seed 42,
-        -- score -2.6054), mantida igual aos defaults do run_experiment.ps1.
+        -- (optimize_hyperparameters.py, stage both, Apr/2023 5 dias, seed 42;
+        -- stage 2 trial 4, score -2.6054), iguais aos defaults do
+        -- run_experiment.ps1. Tres trials empataram nesse score; o desempate
+        -- (rank_results) prefere a deteccao de queda desligada e depois o menor
+        -- trial. Em malha aberta os parametros de PSO/memoria nao alteram o
+        -- score, entao eles nao sao identificaveis pela busca.
         -- SETTLE_CYCLES fica em 1000 no hardware; a simulacao usa 1.
         SETTLE_CYCLES     : integer := 1000;
         W_PSO_G           : integer := 30;
         C1_PSO_G          : integer := 30;
         C2_PSO_G          : integer := 50;
-        RHO_MIN_G         : integer := 53;
+        RHO_MIN_G         : integer := 55;
         RHO_MAX_G         : integer := 65;
-        VEL_MIN_G         : integer := -20;
+        VEL_MIN_G         : integer := -30;
         VEL_MAX_G         : integer := 10;
         DEADZONE_G        : integer := 3;
         SEARCH_RADIUS_G   : integer := 6;
@@ -50,9 +54,9 @@ entity mppt_fpga_top is
         DELTA_V_MIN_G     : integer := 16;
         DUTY_DIRECTION_G  : integer := -1;
         SEARCH_CENTER_MODE_G : integer := 1;
-        MEMORY_HALF_LIFE_G : integer := 300;
-        MAX_PBEST_AGE_G : integer := 1000;
-        ENABLE_CHANGE_DETECTION_G : integer := 1;
+        MEMORY_HALF_LIFE_G : integer := 450;
+        MAX_PBEST_AGE_G : integer := 500;
+        ENABLE_CHANGE_DETECTION_G : integer := 0;
         DROP_THRESHOLD_PERCENT_G : integer := 60;
         DROP_PATIENCE_G : integer := 20
     );

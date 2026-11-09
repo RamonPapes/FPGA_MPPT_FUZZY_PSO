@@ -213,10 +213,10 @@ Get-Content output_files\mptt_fuzzy_pso.fit.summary
 
 | Recurso | Esperado |
 |---|---|
-| ALMs | 3.449 / 18.480 (19%) |
+| ALMs | 3.535 / 18.480 (19%) |
 | Registradores | 677 |
 | Pinos | 44 / 224 (20%) |
-| Blocos DSP | 8 / 66 (12%) |
+| Blocos DSP | 9 / 66 (14%) |
 | Blocos M10K | 0 / 308 |
 
 **Um aviso que voce vai ver e que importa:**
@@ -276,17 +276,22 @@ Esperado para o `clk_core`:
 
 | Canto | Fmax | Setup | Hold | Removal |
 |---|---|---|---|---|
-| Slow 1100mV 85C | 6,195 MHz | +158,581 | +0,360 | +2,275 |
-| Slow 1100mV 0C | **5,987 MHz** | +152,973 | +0,340 | +2,143 |
-| Fast 1100mV 85C | 12,802 MHz | +241,889 | +0,178 | +1,174 |
-| Fast 1100mV 0C | 13,727 MHz | +247,150 | +0,166 | **+1,037** |
+| Slow 1100mV 85C | 6,049 MHz | +154,681 | +0,381 | +2,150 |
+| Slow 1100mV 0C | **5,848 MHz** | +148,991 | +0,362 | +2,028 |
+| Fast 1100mV 85C | 12,587 MHz | +240,554 | +0,178 | +1,222 |
+| Fast 1100mV 0C | 13,471 MHz | +245,767 | **+0,169** | **+1,096** |
+
+Valores para os generics atuais de `mppt_fpga_top` (configuracao otimizada,
+trial 4). Trocar qualquer generic muda a area e o timing.
 
 **Como ler:** todos os slacks tem que ser **positivos**. O pior Fmax e o do
-canto Slow 0C -- e ele precisa ficar acima dos 3,125 MHz em que o core roda. A
-margem atual e de 67%.
+canto Slow 0C -- e ele precisa ficar acima dos 3,125 MHz em que o core roda.
+Hoje ele fica 87% acima.
 
-O menor slack do projeto e o removal de +1,037 ns no canto Fast 0C, no caminho
-do sincronizador de reset. E o numero a vigiar se a frequencia subir.
+O menor slack do projeto e o hold de +0,169 ns no canto Fast 0C, em
+registradores que realimentam a si mesmos; o menor removal e +1,096 ns, no
+caminho do sincronizador de reset. Sao os numeros a vigiar se a frequencia
+subir.
 
 Saidas geradas:
 
@@ -351,7 +356,7 @@ O PATH ja e permanente nesta maquina; nao ha passo 0 a executar.
 # 2. sintetiza?                    -> "was successful. 0 errors"
 quartus_map mptt_fuzzy_pso -c mptt_fuzzy_pso
 
-# 3. cabe no chip?                 -> "3,449 / 18,480 ( 19 % )"
+# 3. cabe no chip?                 -> "3,535 / 18,480 ( 19 % )"
 quartus_fit mptt_fuzzy_pso -c mptt_fuzzy_pso
 
 # 4. fecha timing?                 -> "Todos os cantos fecharam com slack positivo."

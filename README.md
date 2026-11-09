@@ -4,6 +4,20 @@ Projeto de implementacao e avaliacao de um controlador MPPT hibrido em VHDL, com
 
 O projeto usa dados historicos pre-processados de tensao e corrente. Portanto, a simulacao atual e em malha aberta: o duty cycle calculado nao altera a potencia medida no dataset. Por isso, a avaliacao prioriza estabilidade do duty cycle, consistencia numerica e comportamento computacional do controlador.
 
+Duas consequencias da malha aberta que valem para todos os resultados:
+
+- **As entradas nao sao grandezas DC do painel.** A tensao e a tensao AC do
+  quadro de baixa tensao da microrrede (`MG-LV-MSB_AC_Voltage`, ~480 V) e a
+  corrente e derivada como `I = P_PV / V_AC` a partir de `PVPCS_Active_Power`,
+  normalizada pelo maximo de cada mes. O erro `dP/dV` calculado sobre elas
+  nao e a inclinacao da curva P-V do painel.
+- **O PSO nao influencia as metricas.** O `control_duty` (`pno_candidate`) e
+  atualizado so a partir do seu valor anterior e das medicoes, pelo caminho
+  fuzzy/Fokker-Planck/P&O. Como as medicoes nao dependem do duty aplicado, o
+  estado do PSO nunca volta para ele: trocar so parametros de PSO/memoria deixa
+  `control_duty`, `error`, `delta_e` e todas as metricas identicos bit a bit.
+  O PSO afeta apenas `duty_out` (comando das particulas) e o `gbest`.
+
 Relatorio em desenvolvimento: [Overleaf](https://www.overleaf.com/read/cqjckrcscbzw#d27700).
 
 ## Estrutura
@@ -14,7 +28,8 @@ Relatorio em desenvolvimento: [Overleaf](https://www.overleaf.com/read/cqjckrcsc
 - `rlt/pso_search_window_unit.vhd`: calcula a janela dinamica de busca do PSO.
 - `rlt/pso_random_coeff_unit.vhd`: gera os coeficientes pseudoaleatorios do enxame.
 - `rlt/pso_particle_update_unit.vhd`: atualiza posicao e velocidade de uma particula.
-- `rlt/pso_best_tracker_unit.vhd`: atualiza `pbest`, `gbest` e a deteccao de queda de potencia.
+- `rlt/pso_best_tracker_unit.vhd`: atualiza o `pbest` de uma particula com memoria adaptativa (o `gbest` e a deteccao de queda ficam no FSM de `hybrid_pso_fuzzy_mppt`).
+- `rlt/mppt_clock_reset_unit.vhd`: divisor de clock e sincronizador de reset do top de sintese.
 - `rlt/hybrid_pso_fuzzy_mppt.vhd`: nucleo do controlador hibrido.
 - `rlt/mppt_top.vhd`: top-level usado pelo testbench, com as saidas de depuracao.
 - `rlt/mppt_fpga_top.vhd`: top-level de sintese, sem as saidas de depuracao.
@@ -51,7 +66,7 @@ As restricoes estao em `mptt_fuzzy_pso.sdc`, referenciado pelo `.qsf`. Sem
 esse arquivo o Quartus assume um clock default de 1 GHz e o relatorio de
 timing gerado nao significa nada.
 
-O caminho critico do controlador limita o core a cerca de 6,0 MHz no pior
+O caminho critico do controlador limita o core a cerca de 5,8 MHz no pior
 canto. Como o oscilador do DE0-CV e de 50 MHz, `mppt_clock_reset_unit` divide
 o clock por `CLK_DIV_G` (16 por padrao, resultando em 3,125 MHz) e ainda
 sincroniza a liberacao do reset, para que recovery e removal possam ser
@@ -105,37 +120,41 @@ e dos defaults de `run_experiment.ps1`):
 
 | Canto | Fmax `clk_core` | Setup | Hold | Recovery | Removal | MPW `clk_core` |
 |---|---|---|---|---|---|---|
-| Slow 1100mV 85C | 5,991 MHz | +153,087 | +0,400 | +315,074 | +1,062 | +158,913 |
-| Slow 1100mV 0C  | 5,779 MHz | +146,963 | +0,381 | +315,348 | +0,928 | +158,958 |
-| Fast 1100mV 85C | 12,455 MHz | +239,714 | +0,133 | +316,884 | +0,436 | +159,268 |
-| Fast 1100mV 0C  | 13,346 MHz | +245,073 | +0,107 | +317,245 | +0,387 | +159,373 |
+| Slow 1100mV 85C | 6,049 MHz | +154,681 | +0,381 | +313,832 | +2,150 | +159,339 |
+| Slow 1100mV 0C  | 5,848 MHz | +148,991 | +0,362 | +314,125 | +2,028 | +159,271 |
+| Fast 1100mV 85C | 12,587 MHz | +240,554 | +0,178 | +315,971 | +1,222 | +159,657 |
+| Fast 1100mV 0C  | 13,471 MHz | +245,767 | +0,169 | +316,482 | +1,096 | +159,631 |
 
 Slacks em nanossegundos, dominio `clk_core`. Todos positivos: o projeto fecha
 timing em todos os cantos, e o Timing Analyzer reporta `Design is fully
 constrained` tanto para setup quanto para hold. O MPW e o pior de cada clock
-(o `clk_osc` fica entre +9,022 e +9,082 ns).
+(o `clk_osc` fica entre +9,235 e +9,348 ns).
 
-O pior canto e o Slow 1100mV 0C, com **Fmax de 5,779 MHz**, no caminho
+O pior canto e o Slow 1100mV 0C, com **Fmax de 5,848 MHz**, no caminho
 `prev_voltage` -> `pno_candidate` (medicao, fuzzy, Fokker-Planck e P&O num
 unico ciclo). O comportamento e o esperado: setup piora nos cantos lentos,
-hold piora nos rapidos. O menor slack do projeto inteiro e o hold de +0,107 ns
-no Fast 0C, nos registradores `particle_vel`; o menor removal e +0,387 ns, no
-caminho do sincronizador de reset ate o clear dos registradores do core. Sao
-os numeros a vigiar caso a frequencia suba.
+hold piora nos rapidos. O menor slack do projeto inteiro e o hold de +0,169 ns
+no Fast 0C, em registradores que realimentam a si mesmos (`div_count`,
+`track_i`, `wait_counter`); o menor removal e +1,096 ns, do sincronizador de
+reset (`reset_sync`) ate o clear dos registradores do core. Sao os numeros a
+vigiar caso a frequencia suba.
+
+Latencia (`verification/tb_latency.vhd`): uma iteracao completa sobre as dez
+particulas leva `10 * SETTLE_CYCLES + 142` ciclos de `clk_core`, ou seja,
+10.142 ciclos = ~3,25 ms com `SETTLE_CYCLES = 1000` a 3,125 MHz.
 
 Antes de existir SDC, o Quartus reportava 5,63 MHz. O valor atual e menor
 porque agora ha `derive_clock_uncertainty` aplicando jitter e porque o
 `clk_core` e um clock de fabric numa rede global, com skew real. O numero
 anterior era otimista por omissao, nao melhor.
 
-Utilizacao correspondente: 3.645 de 18.480 ALMs (20%), 10 de 66 blocos DSP
-(15%), 44 de 224 pinos (20%), 692 registradores, 0 de 308 blocos M10K.
+Utilizacao correspondente: 3.535 de 18.480 ALMs (19%), 9 de 66 blocos DSP
+(14%), 44 de 224 pinos (20%), 677 registradores, 0 de 308 blocos M10K.
 
 Os generics viram constantes na sintese, entao trocar hiperparametros muda a
 area e o timing. Com a configuracao anterior de generics (W=70, C1=60, C2=60,
 deteccao de queda desligada), o mesmo RTL dava 3.449 ALMs, 8 DSPs e
-5,987 MHz. Na configuracao atual, por exemplo, a logica de deteccao de queda
-deixa de ser eliminada por propagacao de constante. Antes da rodada de otimizacao de area eram
+5,987 MHz. Antes da rodada de otimizacao de area eram
 11.892 ALMs (64%) e 41 DSPs (62%), com Fmax de 5,230 MHz no pior canto. Ver
 `docs/otimizacao_de_sintese.md`.
 
@@ -168,8 +187,37 @@ contra o RTL original, e os arquivos de resultado do experimento saem identicos
 byte a byte. O documento traz o antes e depois de cada alteracao, o uso de
 recursos do dispositivo e como reproduzir cada medicao.
 
-## Verificacao da refatoracao
+## Hiperparametros
 
+A configuracao adotada e a primeira linha de
+`results_final/optimization_runs/optimization_final_best.csv` (stage 2,
+trial 4, score -2,6054), gravada nos generics de `rlt/mppt_fpga_top.vhd` e nos
+defaults de `run_experiment.ps1`:
+
+| W/C1/C2 | rho | VEL | DEADZONE | RADIUS / centro | FOKKER | FUZZY_STEP / EDGE | DIRECTION | HALF_LIFE / MAX_AGE | Deteccao de queda |
+|---|---|---|---|---|---|---|---|---|---|
+| 30/30/50 | 55-65 | [-30, 10] | 3 | 6 / gbest | 1-12 | 30 / 100 | -1 | 450 / 500 | desligada |
+
+Tres trials empataram nesse score. `rank_results` em
+`scripts/optimize_hyperparameters.py` desempata de forma deterministica:
+score decrescente, depois deteccao de queda desligada (hardware mais simples),
+depois menor trial. Como o score nao depende dos parametros de PSO/memoria (ver
+acima), esses parametros nao sao identificaveis pela busca: nos 8 grupos de
+trials com os mesmos parametros fuzzy (25 trials), o score foi identico.
+
+## Verificacao
+
+- `verification/tb_extremes.vhd`: teste dirigido dos extremos de
+  `signed(15 downto 0)` na unidade de medicao, contra `trunc(I*V/65536)`.
+  Cobre o caso I = V = -32768, que estourava `raw_power_t` antes da correcao.
+  ```powershell
+  vlib work_ext
+  vcom -2008 -work work_ext rlt/hybrid_mppt_pkg.vhd rlt/mppt_measurement_unit.vhd verification/tb_extremes.vhd
+  vsim -c -lib work_ext tb_extremes -do "run -all; quit -f"   # TB_EXTREMES PASS
+  ```
+- `verification/tb_latency.vhd`: mede os ciclos entre pulsos de `store_valid`
+  e confere `SETTLE_CYCLES + 13` por particula e `10 * SETTLE_CYCLES + 142` por
+  iteracao (compilar o RTL e o testbench na mesma biblioteca).
 - `verification/tb_equivalence.vhd`: roda o RTL atual e o RTL original
   preservado em `verification/ref/` lado a lado, com o mesmo estimulo, e
   compara amostra a amostra. Execute com
@@ -213,10 +261,17 @@ quartus_asm mptt_fuzzy_pso -c mptt_fuzzy_pso                  # .sof
 
 ## Como Rodar
 
-Experimento completo (pre-processamento, otimizacao, simulacao, metricas, graficos e analise de erro):
+Dependencias Python (versoes validadas em `requirements.txt`, Python 3.14):
 
 ```powershell
-.\run_experiment.ps1 -ArchiveDir archive_final -ResultsDir results_final -CleanWork
+python -m venv .venv
+.venv\Scripts\python -m pip install -r requirements.txt
+```
+
+Experimento completo (pre-processamento, otimizacao, simulacao, metricas, graficos e analise de erro). Reproduz as tabelas e figuras do artigo:
+
+```powershell
+.\run_experiment.ps1 -ArchiveDir archive_final -ResultsDir results_final -CleanWork -PythonExe .venv\Scripts\python.exe
 ```
 
 Para pular a otimizacao e usar os parametros atuais:
